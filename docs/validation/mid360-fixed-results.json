@@ -1,0 +1,128 @@
+{
+  "replay-mid360-fixed-full": {
+    "frontend_odometry_count": 78271,
+    "backend_pose_count": 78214,
+    "cloud_count": 4144,
+    "status_messages": {
+      "NORMAL": 4150
+    },
+    "frontend_gaps": {
+      "p50_ms": 5.36192,
+      "p95_ms": 6.1361152000000025,
+      "p99_ms": 20.01083136,
+      "max_ms": 334.247936
+    },
+    "backend_gaps": {
+      "p50_ms": 5.362944,
+      "p95_ms": 6.198118399999991,
+      "p99_ms": 20.01245184,
+      "max_ms": 334.247936
+    },
+    "frontend_endpoint_displacement_m": 6.027171511390183,
+    "backend_endpoint_displacement_m": 6.028993556916766,
+    "accepted": 429,
+    "rejected": 0,
+    "seed": 1,
+    "accepted_loop_log_count": 14,
+    "fault": false,
+    "node_exit_codes": {
+      "player_exit": 0,
+      "backend_exit": 0,
+      "frontend_exit": 0
+    },
+    "observer_errors": [],
+    "backend_node_died": false,
+    "input_imu_count": 85965,
+    "frontend_first_stamp_ns": 1777273013252953088,
+    "frontend_last_stamp_ns": 1777273441889098496,
+    "frontend_duration_s": 428.636145408,
+    "frontend_endpoint_delta_xyz_m": [
+      5.612719439026851,
+      -0.29482032069740505,
+      2.1765242716283715
+    ],
+    "backend_first_stamp_ns": 1777273013262854400,
+    "backend_last_stamp_ns": 1777273441889098496,
+    "backend_duration_s": 428.626244096,
+    "backend_endpoint_delta_xyz_m": [
+      5.602398000563629,
+      -0.29364329163169217,
+      2.2080927448601964
+    ],
+    "accepted_loop_keyframe_pairs": [
+      [
+        52,
+        37
+      ],
+      [
+        57,
+        41
+      ],
+      [
+        62,
+        43
+      ],
+      [
+        67,
+        38
+      ],
+      [
+        625,
+        610
+      ],
+      [
+        630,
+        608
+      ],
+      [
+        635,
+        613
+      ],
+      [
+        640,
+        620
+      ],
+      [
+        645,
+        627
+      ],
+      [
+        650,
+        634
+      ],
+      [
+        655,
+        635
+      ],
+      [
+        660,
+        641
+      ],
+      [
+        665,
+        638
+      ],
+      [
+        762,
+        5
+      ]
+    ],
+    "accepted_loop_max_keyframe_gap": 757,
+    "backend_online_endpoint_displacement_m": 6.028993556916766,
+    "endpoint_metric_note": "Online messages are historical estimates, not a retrospectively optimized trajectory. Tail loop optimization can finish after the final IMU.",
+    "optimized_keyframe_count": 763,
+    "optimized_first_stamp_s": 1777273013.200408,
+    "optimized_last_stamp_s": 1777273441.7008543,
+    "optimized_endpoint_delta_xyz_m": [
+      0.006429012035717534,
+      0.11689328263769284,
+      -0.11058480685083681
+    ],
+    "optimized_endpoint_displacement_m": 0.16104152019838805,
+    "quality_counts_are_log_rows": true,
+    "cropped_point_fraction": 0.8706844547404766,
+    "full_nonempty_bins_mean": 401.10834942084944,
+    "cropped_nonempty_bins_mean": 77.5395752895753,
+    "descriptor_changed_fraction": 1.0
+  }
+}

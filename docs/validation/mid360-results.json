@@ -1,0 +1,116 @@
+{
+  "replay-mid360-original-full": {
+    "frontend_odometry_count": 85228,
+    "backend_pose_count": 85224,
+    "cloud_count": 4225,
+    "status_messages": {
+      "NORMAL": 4224
+    },
+    "frontend_gaps": {
+      "p50_ms": 5.051904,
+      "p95_ms": 5.918464,
+      "p99_ms": 6.0288,
+      "max_ms": 74.167808
+    },
+    "backend_gaps": {
+      "p50_ms": 5.051136,
+      "p95_ms": 5.918464,
+      "p99_ms": 6.02874368,
+      "max_ms": 74.167808
+    },
+    "frontend_endpoint_displacement_m": 31.966904230445923,
+    "backend_endpoint_displacement_m": 32.082988301875154,
+    "accepted": 429,
+    "rejected": 0,
+    "seed": 1,
+    "accepted_loop_log_count": 11,
+    "fault": false,
+    "node_exit_codes": {
+      "player_exit": 0,
+      "backend_exit": 0,
+      "frontend_exit": 0
+    },
+    "observer_errors": [],
+    "backend_node_died": false,
+    "cropped_point_fraction": 0.9746228557689911,
+    "full_nonempty_bins_mean": 399.2365056818182,
+    "cropped_nonempty_bins_mean": 37.753787878787875,
+    "descriptor_changed_fraction": 1.0
+  },
+  "replay-mid360-original-60": {
+    "frontend_odometry_count": 11440,
+    "backend_pose_count": 11436,
+    "cloud_count": 589,
+    "status_messages": {
+      "NORMAL": 590
+    },
+    "frontend_gaps": {
+      "p50_ms": 5.198848,
+      "p95_ms": 5.942272,
+      "p99_ms": 9.98585344,
+      "max_ms": 84.292352
+    },
+    "backend_gaps": {
+      "p50_ms": 5.198848,
+      "p95_ms": 5.942528,
+      "p99_ms": 9.98875136,
+      "max_ms": 84.292352
+    },
+    "frontend_endpoint_displacement_m": 46.197604319994625,
+    "backend_endpoint_displacement_m": 46.19082550429149,
+    "accepted": 59,
+    "rejected": 0,
+    "seed": 1,
+    "accepted_loop_log_count": 2,
+    "fault": false,
+    "node_exit_codes": {
+      "player_exit": 0,
+      "backend_exit": 0,
+      "frontend_exit": 0
+    },
+    "observer_errors": [],
+    "backend_node_died": false,
+    "cropped_point_fraction": 0.883865645982786,
+    "full_nonempty_bins_mean": 465.4516129032258,
+    "cropped_nonempty_bins_mean": 121.36502546689304,
+    "descriptor_changed_fraction": 1.0
+  },
+  "replay-mid360-cropped-60": {
+    "frontend_odometry_count": 11729,
+    "backend_pose_count": 11727,
+    "cloud_count": 589,
+    "status_messages": {
+      "NORMAL": 590
+    },
+    "frontend_gaps": {
+      "p50_ms": 5.008255999999999,
+      "p95_ms": 5.9264,
+      "p99_ms": 6.05144576,
+      "max_ms": 15.458816
+    },
+    "backend_gaps": {
+      "p50_ms": 5.008255999999999,
+      "p95_ms": 5.9264,
+      "p99_ms": 6.051456,
+      "max_ms": 15.458816
+    },
+    "frontend_endpoint_displacement_m": 46.1774421675636,
+    "backend_endpoint_displacement_m": 46.1796536078744,
+    "accepted": 59,
+    "rejected": 0,
+    "seed": 1,
+    "accepted_loop_log_count": 3,
+    "fault": false,
+    "node_exit_codes": {
+      "player_exit": 0,
+      "backend_exit": 0,
+      "frontend_exit": 0
+    },
+    "observer_errors": [],
+    "backend_node_died": false,
+    "cropped_point_fraction": 0.8835464965453284,
+    "full_nonempty_bins_mean": 465.4193548387097,
+    "cropped_nonempty_bins_mean": 121.5874363327674,
+    "descriptor_changed_fraction": 1.0
+  }
+}

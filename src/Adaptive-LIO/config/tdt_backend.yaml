@@ -1,0 +1,26 @@
+# Launch from z-localization backend with config_file:=this absolute path.
+# Install the upstream config alongside this file or override extends for your checkout.
+extends: /workspace/z-localization/config/backend.yaml
+common:
+  frontend: legacy
+  sensor_frame: aft_mapped
+  odom_frame: odom
+  odom_topic: /odom
+  sync_odom_topic: /adaptive_lio/backend/odometry
+  cloud_topic: /adaptive_lio/backend/cloud
+  input_cloud_in_local_frame: false
+  odom_cloud_sync:
+    max_interval: 0.001
+  body:
+    frame: tdt_sensor
+    rotation: {roll_deg: 0.0, pitch_deg: 0.0, yaw_deg: 0.0}
+    offset: {x: 0.0, y: 0.0, z: 0.0}
+prior_map:
+  enabled: false
+uwb:
+  enabled: false
+trajectory:
+  save_directory: /workspace/adaptive-lio-env/tdt-map
+output:
+  legacy:
+    publish_tf: false

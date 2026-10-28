@@ -423,7 +423,9 @@ int main(int argc, char **argv)
     lio->SetFaultCallback([] { imu_odom_output->Fail(); });
     imu_odom_output->SetFaultCallback([] { lio->RequestStop(); });
     imu_odom_output->Start();
-    lio->SetStateCallback([](const zjloc::LioStateUpdate& state) {
+    std::optional<zjloc::LioStateUpdate> backend_state;
+    lio->SetStateCallback([&](const zjloc::LioStateUpdate& state) {
+        backend_state = state;
         imu_odom_output->OnState(state);
     });
     // Scantext processing queue
@@ -485,12 +487,42 @@ int main(int argc, char **argv)
 
     scantext::ScanContext sc_extractor(scantext_params);
 
+    const bool publish_backend_frames = node->declare_parameter<bool>("publish_backend_frames", false);
+    auto backend_cloud_pub = node->create_publisher<sensor_msgs::msg::PointCloud2>(
+        "/adaptive_lio/backend/cloud", rclcpp::SensorDataQoS().keep_last(5));
+    auto backend_odom_pub = node->create_publisher<nav_msgs::msg::Odometry>(
+        "/adaptive_lio/backend/odometry", rclcpp::SensorDataQoS().keep_last(5));
+
     auto scantext_cbk =
         std::function<bool(const zjloc::CloudPtr &, const SE3 &, double)>(
             [&](const zjloc::CloudPtr &points_world,
                 const SE3 &pose,
                 double time) -> bool
             {
+                // This callback runs on the LIO owner thread after posterior commit.
+                // Never pair the cloud with the independently propagated /odom.
+                if (publish_backend_frames && backend_state && points_world &&
+                    std::abs(backend_state->state.nav.timestamp_ - time) < 1e-9)
+                {
+                    const auto projected = zjloc::ProjectOdometry(
+                        backend_state->state, Vec3d::Zero(), Vec3d::Zero());
+                    nav_msgs::msg::Odometry odom;
+                    odom.header.stamp = get_ros_time(time);
+                    odom.header.frame_id = "odom";
+                    odom.child_frame_id = "aft_mapped";
+                    const auto p = pose.translation();
+                    const auto q = pose.unit_quaternion();
+                    odom.pose.pose.position.x=p.x(); odom.pose.pose.position.y=p.y(); odom.pose.pose.position.z=p.z();
+                    odom.pose.pose.orientation.x=q.x(); odom.pose.pose.orientation.y=q.y();
+                    odom.pose.pose.orientation.z=q.z(); odom.pose.pose.orientation.w=q.w();
+                    for(int r=0;r<6;++r) for(int c=0;c<6;++c)
+                        odom.pose.covariance[r*6+c]=projected.pose_cov(r,c);
+                    sensor_msgs::msg::PointCloud2 cloud;
+                    pcl::toROSMsg(*points_world, cloud);
+                    cloud.header = odom.header;
+                    backend_odom_pub->publish(odom);
+                    backend_cloud_pub->publish(cloud);
+                }
                 if (!scantext_mapping || !points_world || !scantext_mapping->getConfig().enable_mapping)
                     return true;
 
@@ -606,7 +638,7 @@ int main(int argc, char **argv)
 
     lio->setFunc(cloud_pub_func);
     lio->setFunc(data_pub_func);
-    if (scantext_enabled)
+    if (scantext_enabled || publish_backend_frames)
     {
         lio->setFunc(scantext_cbk);
     }
@@ -694,6 +726,10 @@ int main(int argc, char **argv)
     scan_publish_queue_cv.notify_all();
     if (scan_publish_worker.joinable())
         scan_publish_worker.join();
+
+    // Destroy global ROS owners while the local node/context still exist.
+    imu_odom_output.reset();
+    g_tf_broadcaster.reset();
 
     if (rclcpp::ok())
     {

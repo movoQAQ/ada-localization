@@ -1079,11 +1079,8 @@ namespace zjloc
           // Keep ScanContext on the main LIO cloud in non-fusion mode. The
           // auxiliary frame is appended only after this callback, so disabling
           // bundle fusion means exactly "publish only" for the auxiliary points.
-          bool main_cloud_already_filtered = false;
           if (pub_scantext_data)
           {
-               filter_output_cloud();
-               main_cloud_already_filtered = true;
                pub_scantext_data(points_world, pose_of_lo, stamp);
           }
 
@@ -1101,12 +1098,8 @@ namespace zjloc
                }
           }
 
-          if (!main_cloud_already_filtered || has_aux_publish_points)
-          {
-               // If ScanContext already filtered the main cloud, applying these
-               // filters again handles only the newly appended auxiliary points.
-               filter_output_cloud();
-          }
+          // Navigation output alone is height/body cropped; descriptors need full height.
+          filter_output_cloud();
 
           CloudPtr down(new pcl::PointCloud<pcl::PointXYZI>);
           pcl::VoxelGrid<pcl::PointXYZI> vg;

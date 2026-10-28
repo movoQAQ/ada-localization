@@ -1,4 +1,139 @@
-# Adaptive-LIO
+# ada-localization
+
+面向 RoboMaster 哨兵的 **Adaptive-LIO 松耦合里程计 + 独立 T-DT 因子图后端**，当前验证环境为 Ubuntu 24.04 / ROS 2 Jazzy，包含 Mid-360 专用配置、ScanContext 裁剪前点云接口、后端修复补丁和数据验证记录。
+
+本仓库延续 [ECUST-Origin-Sentry-Team/Adaptive-LIO](https://github.com/ECUST-Origin-Sentry-Team/Adaptive-LIO) 的工程改造，独立后端来自 [mozihe/z-localization](https://github.com/mozihe/z-localization)。**没有切换为上游 ZLIO 紧耦合前端。** 当前仓库名为 `ada-localization`，ROS 包名仍为 `adaptive_lio`。
+
+## 当前实现
+
+```mermaid
+flowchart LR
+    L[Mid-360 LiDAR] --> F[Adaptive-LIO 松耦合 ESKF]
+    I[IMU] --> F
+    F --> O[高频局部 /odom]
+    F --> S[同一帧末位姿和未作导航高度裁剪的点云]
+    S --> B[T-DT legacy 后端]
+    O --> B
+    B --> C[ScanContext 检索 / 几何验证 / PCM / NIS]
+    C --> G[因子图 / map 到 odom / 优化关键帧轨迹]
+    F --> N[导航点云 Z 和车体裁剪 / livox/scan]
+```
+
+- 后端接口为 `/adaptive_lio/backend/odometry` 和 `/adaptive_lio/backend/cloud`，采用相同帧末时间戳；高频 `/odom` 独立输出。
+- 原 ScanContext 回调和后端点云入口位于导航高度、车体裁剪之前，避免世界 Z 裁剪破坏描述子。此处点云仍经过前端采样和去畸变，并非原始全分辨率点云。
+- Mid-360 前端使用几何自适应激光观测协方差；原 `mapping_m.yaml` 的默认配置保留。
+- 后端补丁增加可选重访配准初值、起点历史邻域，并修复历史 PCM 支持数为 0 时被归一化强制改成 1 的问题。
+- Mid-360 专用后端采用 Huber 核、至少三个当前一致候选和完整六维 NIS；禁用不适用的固定世界 Z 残差与历史 PCM 支持要求。其他配置不自动启用这些专用策略。
+
+后端源码通过**固定上游提交 + 本仓库补丁**交付，不包含第二份完整后端树。补丁及应用说明见 [tools/patches](tools/patches/README.md)。仅构建本仓库的前端不会自动安装后端。
+
+## 已验证结果及口径
+
+SEU library Mid-360 原包约 429.83 秒，保留消息与原始时间戳，以 1 倍速回放。最终完整运行观察器收到 85,965 条 IMU，无停链，相关进程退出码均为 0。
+
+| 统计对象 | 3D 首尾距离 |
+|---|---:|
+| 原配置在线后端消息 | 32.083 m |
+| 最终配置在线前端消息 | 6.027 m |
+| 最终配置在线后端消息 | 6.029 m |
+| **最终保存的优化关键帧轨迹** | **0.161 m** |
+| 原始首尾点云独立配准估计 | 约 0.16～0.17 m |
+
+最终接受了关键帧 `762 → 5` 的跨整圈约束，6 个候选形成一致团，NIS 概率 `0.0178481` 通过 `0.001` 门限。最后的闭环优化发生在最后一条 IMU 之后，因此最后在线消息保留修正前值；历史在线消息不会被回溯重写。**0.161 m 是优化轨迹闭合距离，不是在线末消息偏差，也不是真值 ATE。** 数据没有外部真值，不能由单包闭合推导全场景精度或稳定性结论。
+
+此前验证通过前端 5 组 CTest、后端 80 个用例；这些是对应修复版本的测试记录，本次仓库整理没有重新完整回放。原始 bag、构建产物、Docker 镜像不随仓库分发。
+
+- [完整修复报告、失败对照和限制](docs/validation/mid360-fix-report.md)
+- [最终指标 JSON](docs/validation/mid360-fixed-results.json) · [优化关键帧](docs/validation/mid360-fixed-keyframes.txt) · [关键日志](docs/validation/mid360-fixed-evidence.log)
+- [原始首尾点云独立检查](docs/validation/seu-endpoint-check.md)
+- [Avia quick-shack 验证与输入时间故障](docs/validation/quick-shack-report.md)
+
+![轨迹对照，灰色为在线历史消息，蓝色为最终优化关键帧](docs/validation/mid360-fixed-trajectories.png)
+
+## 构建及运行联合定位
+
+先按下文“前端工程说明”的依赖和编译步骤构建 `adaptive_lio`。在新终端中准备独立后端：
+
+```bash
+# 在 ada-localization 仓库根目录执行；两个仓库放在同级目录。
+ADA_ROOT="$(pwd)"
+git clone https://github.com/mozihe/z-localization.git ../z-localization
+git -C ../z-localization checkout 76e126328b670adc92981d9b4900cc059a6f2343
+git -C ../z-localization apply --check "$ADA_ROOT/tools/patches/z-localization-adaptive-lio.patch"
+git -C ../z-localization apply "$ADA_ROOT/tools/patches/z-localization-adaptive-lio.patch"
+```
+
+后端除 ROS/PCL/Eigen/TBB 依赖外，需要 **GTSAM 4.2、nanoflann 1.4.3、libmetis-dev**。本次 Jazzy 环境曾遇到系统 nanoflann 1.5.4 接口不兼容，以及 GTSAM 包导出 CppUnitLite 但缺少库的问题；后者通过编译 GTSAM 4.2 对应 CppUnitLite 源码解决，没有删除测试或使用空库。详见 [集成说明](docs/tdt-integration.md)。这不是已验证的全新机器一键安装脚本。
+
+在上述依赖已安装后，构建独立后端：
+
+```bash
+source /opt/ros/jazzy/setup.bash
+cd ../z-localization
+rosdep install --from-paths src/backend src/localization_interfaces \
+  --ignore-src -r -y --rosdistro jazzy
+# 指向包含 1.4.3 版 nanoflann.hpp 的实际目录
+NANOFLANN_INCLUDE_DIR=/absolute/path/to/nanoflann-1.4.3/include
+CMAKE_BUILD_PARALLEL_LEVEL=2 colcon build \
+  --packages-select localization_interfaces backend \
+  --cmake-args -DBUILD_TESTING=ON -DNANOFLANN_INCLUDE_DIR="$NANOFLANN_INCLUDE_DIR"
+source install/setup.bash
+ctest --test-dir build/backend \
+  -R '^backend_(descriptor|relocalization|localization|graph|measurement|lifecycle)_test$' \
+  --output-on-failure
+```
+
+**启动前调整路径：** 当前受测 YAML 保留云环境绝对路径。将 `config/tdt_backend.yaml` 的 `extends` 指向本机后端 `config/backend.yaml`，将 `config/tdt_backend_mid360.yaml` 的 `extends` 指向本机 `tdt_backend.yaml`，并调整 `trajectory.save_directory`。配置位于 `src/Adaptive-LIO/config/`。`tools/build_tdt_backend.sh` 与回放工具也包含云环境路径，不能原样当作通用部署入口。
+
+在同一个终端 source ROS、前端和后端的安装空间，然后启动：
+
+```bash
+source /opt/ros/jazzy/setup.bash
+source /absolute/path/to/ada-localization/install/setup.bash
+source /absolute/path/to/z-localization/install/setup.bash
+ros2 launch adaptive_lio tdt_backend.launch.py \
+  frontend_config:=/absolute/path/to/ada-localization/src/Adaptive-LIO/config/mapping_mid360.yaml \
+  backend_config:=/absolute/path/to/ada-localization/src/Adaptive-LIO/config/tdt_backend_mid360.yaml \
+  use_sim_time:=true
+# 在另一已 source ROS 的终端播放 ROS2 包：
+ros2 bag play /absolute/path/to/ros2_bag --clock --rate 1
+```
+
+实机运行将 `use_sim_time` 设为 `false`，另行启动雷达驱动。检查 `/livox/lidar`、`/livox/imu`、消息类型、点时间、外参和加速度单位：专用配置的 `gnorm=9.805` 假设输入加速度单位为 g；已经是 m/s² 时不能再次这样缩放。此联合入口默认 mapping，未启用 UWB/先验地图；不是 Nav2 或底盘控制系统。
+
+复算最终保存轨迹指标（Python 环境需要 numpy）：
+
+```bash
+python tools/summarize_tdt_replay.py /path/to/replay_output \
+  --optimized-keyframes docs/validation/mid360-fixed-keyframes.txt
+```
+
+`/path/to/replay_output` 是含 metrics.json 和前后端日志的回放输出目录，不是 bag 目录；全部原始运行输出未打包进 Git。仓库已保存汇总和小型证据。
+
+## 遗留问题与部署边界
+
+| 问题 | 当前状态 / 影响 |
+|---|---|
+| IMU 时间故障 | 曾出现一次 `TimeFault(reason=8)` 并停链。独立观察器同段时间戳连续，前端实际接收序列未逐条记录，传输/调度原因尚未定位。没有关闭故障保护，不能宣布长期稳定性通过。 |
+| 运动起步初始化 | 静态初始化逻辑未重写；移动起步可能导致误判或延迟初始化，不同运行的首条定位时间可能不同。尚未实现可靠的动态初始化。 |
+| 世界 Z 与重力方向 | 初始世界 Z 不保证重力竖直。导航固定世界 Z 裁剪仍有语义限制；将描述子入口放到裁剪前并未解决重力坐标系本身。 |
+| 尾部异步优化与在线输出 | bag 结束后完成的闭环可能尚未反映到最后一条在线定位消息。最终优化轨迹必须单独保存和评估，不能把两个口径混用。 |
+| 真值与跨场景鲁棒性 | SEU library 无外部真值；未完成其他场景、重复走廊、升降坡道、动态遮挡和长期实车验证，不能报告未经验证的 ATE/RPE 或普适参数。 |
+| 标定与统计门限 | 外参、驱动是否预变换、加速度单位需要逐设备核实。自适应协方差、世界 Z/历史 PCM 策略和 Huber 配置为当前实验配置，未完成跨设备统计标定。 |
+| 重置和会话 | 当前使用 legacy 接口，未实现 ZLIO 原子会话/暖重置协议；故障或重新播放应一起重启前后端。 |
+| 性能与实时性 | 最终回放在线输出最大时间戳间隔约 334 ms，未完成实时延迟预算验收。回放无崩溃不代表控制系统可直接使用。 |
+| 可移植部署 | YAML、工具包含 `/workspace/Adaptive-LIO` 等绝对路径；后端和依赖需另行准备，尚非全新机器一键构建。 |
+
+## 来源、许可与工程说明
+
+前端沿用原仓库历史及各组件许可声明；独立后端及其补丁遵循上游 `GPL-2.0-only`。第三方代码保留各自声明，不以新仓库名替换上游归属。原论文引用和前端内部设计见下文。
+
+以下保留并更新原前端工程文档。其“默认配置”指单独运行的 `mapping_m.yaml`，不等同于上文显式选择的 Mid-360 联合定位配置。
+
+---
+
+## 前端工程说明
+
 
 **面向 RoboMaster 哨兵机器人的 LiDAR–IMU 里程计 | ROS 2 Jazzy**
 
@@ -7,9 +142,9 @@
 [![C++](https://img.shields.io/badge/C%2B%2B-17-00599C)](https://isocpp.org/)
 [![Original Paper](https://img.shields.io/badge/Paper-Adaptive--LIO-004088)](https://ieeexplore.ieee.org/document/10806842)
 
-> 本仓库是基于 [原版 Adaptive-LIO](https://github.com/chengwei0427/Adaptive-LIO) 的工程化改造版本，主要用于 ECUST Origin Sentry 的 LiDAR–IMU 里程计开发与独立验证。**它不是原论文的逐行复现，也不包含完整导航、全局定位或底盘控制系统。**
+> 本仓库是基于 [原版 Adaptive-LIO](https://github.com/chengwei0427/Adaptive-LIO) 的工程化改造版本，主要用于 ECUST Origin Sentry 的 LiDAR–IMU 里程计开发与独立验证。**前端不是原论文的逐行复现；本仓库通过上文独立后端提供闭环定位集成，不包含完整导航或底盘控制系统。**
 >
-> 当前默认分支为 `ljb`；下文所述均以该分支配置与源码为准。
+> 本仓库以 `main` 发布；原前端开发基线来自 `ljb`，下文默认参数指前端独立配置。
 
 ## 项目概览
 
@@ -113,7 +248,7 @@ sudo apt install -y \
 ### 2. 获取并编译
 
 ```bash
-git clone --branch ljb https://github.com/ECUST-Origin-Sentry-Team/Adaptive-LIO.git adalio_ws
+git clone https://github.com/movoQAQ/ada-localization.git adalio_ws
 cd adalio_ws
 source /opt/ros/jazzy/setup.bash
 
@@ -176,7 +311,7 @@ ros2 launch adaptive_lio run.launch.py \
 | 发布 | `/velocity`、`/move_dist` | `std_msgs/msg/Float32`；保留的标量诊断输出 |
 | 服务 | `/save_map_service` | `std_srvs/srv/Trigger`；与可选地图模块关联 |
 
-**坐标系职责**：`odom` 为本地连续里程计参考系；`aft_mapped` 是里程计跟踪的 IMU 相关状态坐标系；`base_link` 通过配置外参连接到车体。默认外参在 `common.fusion_aft_to_base_xyzrpy`，需按传感器安装和整车 TF 规划重新标定。**本包不发布 `map → odom`**，因此接入 Nav2、GICP 重定位或其他全局定位器时，必须由外部模块负责该变换，不应额外重复发布 `odom → base_link`。
+**坐标系职责**：`odom` 为本地连续里程计参考系；`aft_mapped` 是里程计跟踪的 IMU 相关状态坐标系；`base_link` 通过配置外参连接到车体。默认外参在 `common.fusion_aft_to_base_xyzrpy`，需按传感器安装和整车 TF 规划重新标定。**前端本包不发布 `map → odom`**；联合入口由独立后端负责该变换。单独接入 Nav2、GICP 重定位或其他全局定位器时，必须由外部模块负责该变换，不应额外重复发布 `odom → base_link`。
 
 基础检查命令：
 
@@ -279,11 +414,11 @@ bash src/Adaptive-LIO/test/run_registration_tests.sh
 
 ## 已知限制
 
-- 该仓库提供**局部里程计**，不提供闭环全局图优化、`map → odom` 全局定位或 Nav2 整套导航功能。
+- 前端独立运行提供局部里程计；联合入口增加独立后端的闭环图优化和 map→odom，仍不包含 Nav2 整套导航。
 - 主副雷达联合匹配、ScanContext 地图、自适应 LiDAR 协方差、IMU 短时保持均不是默认工作配置。
 - 当前外参与 IMU 单位换算针对特定设备和驱动发布约定。移植时须核对**原始消息语义**，不可直接复用数值。
 - 通过单元测试与 RViz 轨迹连续，不等于完成精度、退化鲁棒性、延迟预算或实车安全性验收。
-- 当前缺少随仓库分发的公开标准数据集与定量 A/B 精度结果，因此不作未证实的性能领先声明。
+- 原始数据集不随仓库分发；已有公开数据回放和闭合对照，但缺少真值精度与跨场景验收，因此不作性能领先声明。
 
 ## 技术文档
 

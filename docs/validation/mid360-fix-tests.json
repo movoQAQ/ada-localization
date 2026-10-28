@@ -1,0 +1,48 @@
+{
+  "backend": {
+    "backend_descriptor_test.gtest.xml": {
+      "tests": "8",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-26T00:42:31.170"
+    },
+    "backend_graph_test.gtest.xml": {
+      "tests": "9",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-26T00:42:30.754"
+    },
+    "backend_lifecycle_test.gtest.xml": {
+      "tests": "21",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-26T00:42:30.668"
+    },
+    "backend_localization_test.gtest.xml": {
+      "tests": "31",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-26T00:42:31.032"
+    },
+    "backend_measurement_test.gtest.xml": {
+      "tests": "5",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-26T00:42:30.591"
+    },
+    "backend_relocalization_test.gtest.xml": {
+      "tests": "6",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-26T00:42:30.937"
+    }
+  },
+  "total_backend_tests": 80,
+  "frontend_ctest_suites_passed": [
+    "core",
+    "geometry",
+    "registration",
+    "pipeline",
+    "imu_quality"
+  ]
+}

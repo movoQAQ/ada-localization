@@ -36,8 +36,12 @@ struct LidarOdomTestAccess {
             point3D aux;aux.raw_point=Vec3d(20,20,20);aux.timestamp=m.lidar_end_time_;aux.ring=0;
             m.aux_lidar_.push_back(aux);return m;
         };
+        // Aggressive navigation crop must not truncate descriptor/backend input.
+        l.cloud_pub_options.min_z_filter=-.1;
+        l.cloud_pub_options.max_z_filter=.1;
         auto seed=measure(1.,Vec3d::Zero());l.ProcessMeasurements(seed);
         require(updates==1 && products==1 && keyframes==1,"seed products");
+        require(main_world && main_world->size()==world.size(),"SC/backend cloud height cropped");
         require(l.match_quality_.residuals==0 && !l.geometry_quality_.valid,"seed invented geometry");
         require(l.eskf_.GetNominalState().p_.norm()<1e-12,"seed corrected pose");
         for(const auto& v:l.voxel_map)for(const auto& pt:v.second.points)require(pt.norm()<5,"publish-only aux entered map");

@@ -1,0 +1,6 @@
+{
+  "imu_header_gap_max_s": 0.005194700000004104,
+  "backward_or_duplicate": 0,
+  "gyro_norm_peak_rad_s": 3.977809717002618,
+  "gyro_norm_p95_rad_s": 2.253650030955
+}

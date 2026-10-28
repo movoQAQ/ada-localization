@@ -1,0 +1,260 @@
+{
+  "duration_s": 429.830378436,
+  "connections": [
+    {
+      "topic": "/livox/imu",
+      "type": "sensor_msgs/msg/Imu",
+      "count": 85965
+    },
+    {
+      "topic": "/livox/lidar",
+      "type": "livox_ros_driver2/msg/CustomMsg",
+      "count": 4298
+    }
+  ],
+  "first_2s": {
+    "samples": 401,
+    "acc_norm_median": 0.9926716490741851,
+    "acc_var": [
+      0.0058177007519087266,
+      0.0016257910671444499,
+      0.0021884284480575386
+    ],
+    "gyro_norm_max": 0.7245925615047366,
+    "gyro_var": [
+      0.00836830967062349,
+      0.047763028351345056,
+      0.024535651529083623
+    ]
+  },
+  "imu_timing": {
+    "count": 85965,
+    "nonpositive_intervals": 0,
+    "max_gap_s": 0.007714748382568359,
+    "p99_gap_s": 0.0060083866119384766,
+    "record_header_offset_median_s": 0.0001964569091796875
+  },
+  "scans": [
+    {
+      "topic": "/livox/lidar",
+      "frame": "livox_frame",
+      "stamp": 1777273012.000212,
+      "timebase": 1777273012000211900,
+      "points": 19872,
+      "offset_range": [
+        0,
+        100195680
+      ]
+    },
+    {
+      "topic": "/livox/lidar",
+      "frame": "livox_frame",
+      "stamp": 1777273012.1001093,
+      "timebase": 1777273012100109415,
+      "points": 19968,
+      "offset_range": [
+        0,
+        100238312
+      ]
+    },
+    {
+      "topic": "/livox/lidar",
+      "frame": "livox_frame",
+      "stamp": 1777273012.200075,
+      "timebase": 1777273012200075098,
+      "points": 20064,
+      "offset_range": [
+        0,
+        100304697
+      ]
+    },
+    {
+      "topic": "/livox/lidar",
+      "frame": "livox_frame",
+      "stamp": 1777273012.300119,
+      "timebase": 1777273012300119045,
+      "points": 19968,
+      "offset_range": [
+        0,
+        100264293
+      ]
+    },
+    {
+      "topic": "/livox/lidar",
+      "frame": "livox_frame",
+      "stamp": 1777273012.4001255,
+      "timebase": 1777273012400125446,
+      "points": 20064,
+      "offset_range": [
+        0,
+        100348177
+      ]
+    },
+    {
+      "topic": "/livox/lidar",
+      "frame": "livox_frame",
+      "stamp": 1777273012.5013623,
+      "timebase": 1777273012501362451,
+      "points": 19968,
+      "offset_range": [
+        0,
+        99084673
+      ]
+    },
+    {
+      "topic": "/livox/lidar",
+      "frame": "livox_frame",
+      "stamp": 1777273012.6001892,
+      "timebase": 1777273012600189224,
+      "points": 20064,
+      "offset_range": [
+        0,
+        100308535
+      ]
+    },
+    {
+      "topic": "/livox/lidar",
+      "frame": "livox_frame",
+      "stamp": 1777273012.7002344,
+      "timebase": 1777273012700234561,
+      "points": 19968,
+      "offset_range": [
+        0,
+        100194905
+      ]
+    },
+    {
+      "topic": "/livox/lidar",
+      "frame": "livox_frame",
+      "stamp": 1777273012.8001795,
+      "timebase": 1777273012800179452,
+      "points": 20064,
+      "offset_range": [
+        0,
+        100330262
+      ]
+    },
+    {
+      "topic": "/livox/lidar",
+      "frame": "livox_frame",
+      "stamp": 1777273012.9002233,
+      "timebase": 1777273012900223209,
+      "points": 19872,
+      "offset_range": [
+        0,
+        100099077
+      ]
+    },
+    {
+      "topic": "/livox/lidar",
+      "frame": "livox_frame",
+      "stamp": 1777273013.0000763,
+      "timebase": 1777273013000076243,
+      "points": 20064,
+      "offset_range": [
+        0,
+        100308971
+      ]
+    },
+    {
+      "topic": "/livox/lidar",
+      "frame": "livox_frame",
+      "stamp": 1777273013.100161,
+      "timebase": 1777273013100161124,
+      "points": 19968,
+      "offset_range": [
+        0,
+        100246852
+      ]
+    },
+    {
+      "topic": "/livox/lidar",
+      "frame": "livox_frame",
+      "stamp": 1777273013.2001667,
+      "timebase": 1777273013200166577,
+      "points": 20064,
+      "offset_range": [
+        0,
+        100364341
+      ]
+    },
+    {
+      "topic": "/livox/lidar",
+      "frame": "livox_frame",
+      "stamp": 1777273013.30027,
+      "timebase": 1777273013300269974,
+      "points": 19872,
+      "offset_range": [
+        0,
+        100257705
+      ]
+    },
+    {
+      "topic": "/livox/lidar",
+      "frame": "livox_frame",
+      "stamp": 1777273013.4001327,
+      "timebase": 1777273013400132555,
+      "points": 20064,
+      "offset_range": [
+        0,
+        100423240
+      ]
+    },
+    {
+      "topic": "/livox/lidar",
+      "frame": "livox_frame",
+      "stamp": 1777273013.5003057,
+      "timebase": 1777273013500305782,
+      "points": 19968,
+      "offset_range": [
+        0,
+        100202894
+      ]
+    },
+    {
+      "topic": "/livox/lidar",
+      "frame": "livox_frame",
+      "stamp": 1777273013.600236,
+      "timebase": 1777273013600236007,
+      "points": 19968,
+      "offset_range": [
+        0,
+        100137631
+      ]
+    },
+    {
+      "topic": "/livox/lidar",
+      "frame": "livox_frame",
+      "stamp": 1777273013.7002172,
+      "timebase": 1777273013700217261,
+      "points": 20160,
+      "offset_range": [
+        0,
+        100325903
+      ]
+    },
+    {
+      "topic": "/livox/lidar",
+      "frame": "livox_frame",
+      "stamp": 1777273013.8002582,
+      "timebase": 1777273013800258144,
+      "points": 19968,
+      "offset_range": [
+        0,
+        100228195
+      ]
+    },
+    {
+      "topic": "/livox/lidar",
+      "frame": "livox_frame",
+      "stamp": 1777273013.90024,
+      "timebase": 1777273013900239895,
+      "points": 19968,
+      "offset_range": [
+        0,
+        100175391
+      ]
+    }
+  ],
+  "sha256": "7c2088ef0527f5f27c99c45f22772f511a842f5a9f670b24d21bfc1e7425cfbb"
+}

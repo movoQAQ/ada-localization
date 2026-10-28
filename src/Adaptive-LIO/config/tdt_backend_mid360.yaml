@@ -1,0 +1,25 @@
+# Mid-360 legacy frontend: geometric revisit seed with full 6D innovation checks.
+extends: /workspace/Adaptive-LIO/src/Adaptive-LIO/config/tdt_backend.yaml
+loop:
+  # Retrieval radius only; geometric registration, overlap and NIS stay unchanged.
+  candidate_max_distance: 40.0
+  place_seed_enabled: true
+  place_seed_min_keyframe_gap: 60
+  validation:
+    # Adaptive-LIO's odom Z is not guaranteed gravity aligned. This gate is an
+    # odometry-Z agreement check, NOT measured cloud separation. Defer that
+    # innovation to the unchanged full 6D graph NIS check; retain geometry gates.
+    max_z: 0.0
+  pcm:
+    # The historical gate uses a fixed 1 m tolerance across arbitrarily long raw
+    # odometry chains. Local loops cannot support the first drift-correcting
+    # global revisit under that model. Use a current candidate clique instead;
+    # still submit only one measurement, subject to the unchanged graph NIS.
+    min_consistent_loops: 0
+    min_candidate_clique_size: 3
+graph:
+  robust:
+    # A redescending Cauchy loss can suppress a valid large loop correction even
+    # after it passes NIS. Huber retains bounded influence without discarding it.
+    kernel: huber
+    size: 1.0

@@ -31,6 +31,8 @@ def generate_launch_description():
         name=project,
         output='screen',
         arguments=['--config_file', adaptive_lio_cfg_dir],
+        parameters=[{'publish_backend_frames': LaunchConfiguration('publish_backend_frames'),
+                     'use_sim_time': LaunchConfiguration('use_sim_time')}],
     )
 
     # RVIZ 可视化节点
@@ -47,6 +49,8 @@ def generate_launch_description():
 
     ld = LaunchDescription(
         [
+            DeclareLaunchArgument('publish_backend_frames', default_value='false'),
+            DeclareLaunchArgument('use_sim_time', default_value='false'),
             declare_rviz_cmd,
             declare_adaptive_lio_cfg_dir,
             adaptive_lio_node,

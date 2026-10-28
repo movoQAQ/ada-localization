@@ -1,0 +1,102 @@
+{
+  "replay-sensor-full": {
+    "frontend_odometry_count": 9600,
+    "backend_pose_count": 9599,
+    "cloud_count": 459,
+    "status_messages": {
+      "NORMAL": 447
+    },
+    "frontend_gaps": {
+      "p50_ms": 4.998329,
+      "p95_ms": 5.0589929,
+      "p99_ms": 5.085181980000001,
+      "max_ms": 15.045561
+    },
+    "backend_gaps": {
+      "p50_ms": 4.9983445,
+      "p95_ms": 5.05899435,
+      "p99_ms": 5.08518247,
+      "max_ms": 15.045561
+    },
+    "frontend_endpoint_displacement_m": 0.047772027918319616,
+    "backend_endpoint_displacement_m": 0.06595242107961091,
+    "accepted": 476,
+    "rejected": 0,
+    "seed": 1,
+    "accepted_loop_log_count": 10,
+    "fault": false,
+    "node_exit_codes": {
+      "player_exit": 0,
+      "backend_exit": 0,
+      "frontend_exit": 0
+    },
+    "observer_errors": [],
+    "backend_node_died": false,
+    "cropped_point_fraction": 0.5354834017078648,
+    "full_nonempty_bins_mean": 43.11764705882353,
+    "cropped_nonempty_bins_mean": 27.734204793028322,
+    "descriptor_changed_fraction": 1.0
+  },
+  "replay-sensor-cropped-v2": {
+    "frontend_odometry_count": 9169,
+    "backend_pose_count": 9167,
+    "cloud_count": 441,
+    "status_messages": {
+      "NORMAL": 433
+    },
+    "frontend_gaps": {
+      "p50_ms": 4.99832,
+      "p95_ms": 5.05893365,
+      "p99_ms": 5.084029630000001,
+      "max_ms": 14.998269
+    },
+    "backend_gaps": {
+      "p50_ms": 4.99832,
+      "p95_ms": 5.05893575,
+      "p99_ms": 5.08403385,
+      "max_ms": 14.998269
+    },
+    "frontend_endpoint_displacement_m": 0.05430850582030646,
+    "backend_endpoint_displacement_m": 0.09130329513874579,
+    "accepted": 454,
+    "rejected": 0,
+    "seed": 1,
+    "accepted_loop_log_count": 10,
+    "fault": false,
+    "node_exit_codes": {
+      "player_exit": 0,
+      "backend_exit": 0,
+      "frontend_exit": 0
+    },
+    "observer_errors": [],
+    "backend_node_died": false,
+    "cropped_point_fraction": 0.5388210771148814,
+    "full_nonempty_bins_mean": 43.131519274376416,
+    "cropped_nonempty_bins_mean": 27.206349206349206,
+    "descriptor_changed_fraction": 1.0
+  },
+  "replay-aligned-full": {
+    "frontend_odometry_count": 0,
+    "backend_pose_count": 0,
+    "cloud_count": 0,
+    "status_messages": {
+      "INITIALIZING": 1
+    },
+    "frontend_gaps": null,
+    "backend_gaps": null,
+    "frontend_endpoint_displacement_m": null,
+    "backend_endpoint_displacement_m": null,
+    "accepted": 0,
+    "rejected": 0,
+    "seed": 0,
+    "accepted_loop_log_count": 0,
+    "fault": true,
+    "node_exit_codes": {
+      "player_exit": 0,
+      "backend_exit": 0,
+      "frontend_exit": 0
+    },
+    "observer_errors": [],
+    "backend_node_died": false
+  }
+}

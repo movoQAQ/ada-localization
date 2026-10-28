@@ -1,0 +1,517 @@
+diff --git a/config/backend.yaml b/config/backend.yaml
+index 9e8464a..bd27725 100644
+--- a/config/backend.yaml
++++ b/config/backend.yaml
+@@ -275,6 +275,9 @@ loop:
+   cooldown_keyframes: 5
+   # 回环候选允许的最大优化位姿距离，单位为米；0 表示不限。
+   candidate_max_distance: 7.0
++  # 仅对非近期、有描述子航向的候选尝试地点附近初值；仍需通过全部验收。
++  place_seed_enabled: false
++  place_seed_min_keyframe_gap: 60
+   # 回环最佳与次佳描述子距离的比值上限。
+   descriptor_ratio_threshold: 1.0
+   source:
+@@ -295,7 +298,7 @@ loop:
+   validation:
+     # 回环测量允许的最大平移长度，单位为米。
+     max_translation: 3.0
+-    # 回环测量允许的最大垂直位移，单位为米。
++    # 回环测量与原始里程计的世界Z残差上限，单位m；要求odom重力对齐，0禁用。
+     max_z: 0.5
+     # 回环测量允许的最大 roll/pitch，单位为度。
+     max_roll_pitch_deg: 10.0
+@@ -312,7 +315,7 @@ loop:
+     translation_threshold: 1.0
+     # PCM 闭合误差允许的最大旋转，单位为度。
+     rotation_threshold_deg: 15.0
+-    # 提交回环要求的最少历史一致边数量，达到即停止历史检查；无适用历史时允许启动。
++    # 最少历史一致边数；0仅禁用历史支持要求，不禁用当前候选PCM；无适用历史时允许启动。
+     min_consistent_loops: 1
+     # 同源候选批次要求的最小一致团规模。
+     min_candidate_clique_size: 1
+diff --git a/src/backend/CMakeLists.txt b/src/backend/CMakeLists.txt
+index c51f167..6a9960d 100644
+--- a/src/backend/CMakeLists.txt
++++ b/src/backend/CMakeLists.txt
+@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.16)
+ if(POLICY CMP0074)
+     cmake_policy(SET CMP0074 NEW)
+ endif()
+-project(backend LANGUAGES CXX)
++project(backend LANGUAGES C CXX)
+ include(${CMAKE_CURRENT_LIST_DIR}/../../cmake/Warnings.cmake)
+ 
+ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+@@ -180,4 +180,10 @@ if(BUILD_TESTING)
+     add_subdirectory(test)
+ endif()
+ 
++# Offline map inspection; deliberately not an automatic test or runtime node.
++if(BUILD_TESTING)
++  add_executable(backend_loop_inspect EXCLUDE_FROM_ALL test/tools/inspect_loop.cpp)
++  target_link_libraries(backend_loop_inspect PRIVATE backend_core)
++endif()
++
+ ament_package()
+diff --git a/src/backend/apps/fusion_parameters.cpp b/src/backend/apps/fusion_parameters.cpp
+index 5c5ca2e..53e7ce7 100644
+--- a/src/backend/apps/fusion_parameters.cpp
++++ b/src/backend/apps/fusion_parameters.cpp
+@@ -113,6 +113,8 @@ void ParameterReader::loadLoopAndGraph() {
+     getParam("loop/enabled", parameters_.runtime.loop.enabled);
+     getParam("loop/cooldown_keyframes", parameters_.runtime.loop.cooldown_keyframes);
+     getParam("loop/candidate_max_distance", parameters_.runtime.loop.candidate_max_distance);
++    getParam("loop/place_seed_enabled", parameters_.runtime.loop.place_seed_enabled);
++    getParam("loop/place_seed_min_keyframe_gap", parameters_.runtime.loop.place_seed_min_keyframe_gap);
+     getParam("loop/descriptor_ratio_threshold",
+              parameters_.runtime.loop.descriptor_ratio_threshold);
+     getParam("loop/source/min_frames", parameters_.runtime.loop.source.min_frames);
+diff --git a/src/backend/apps/node_setup.cpp b/src/backend/apps/node_setup.cpp
+index c01622a..dfe7689 100644
+--- a/src/backend/apps/node_setup.cpp
++++ b/src/backend/apps/node_setup.cpp
+@@ -123,7 +123,7 @@ void LocalizationNode::configureServices() {
+         parameters_.services.save_map,
+         std::bind(&LocalizationNode::saveMapService, this, std::placeholders::_1,
+                   std::placeholders::_2),
+-        rmw_qos_profile_services_default, map_callback_group_);
++        rclcpp::ServicesQoS(), map_callback_group_);
+     relocalize_service_ = create_service<std_srvs::srv::Trigger>(
+         parameters_.services.relocalize, std::bind(&LocalizationNode::relocalizeService, this,
+                                                    std::placeholders::_1, std::placeholders::_2));
+@@ -154,6 +154,9 @@ void LocalizationNode::completeStartup() {
+         "unified backend ready: prior_map="
+             << (parameters_.runtime.prior_map_enabled ? "enabled" : "disabled")
+             << ", loop=" << (parameters_.runtime.loop.enabled ? "enabled" : "disabled")
++            << ", loop_history_min=" << parameters_.runtime.loop.verification.min_consistent_loops
++            << ", loop_clique_min=" << parameters_.runtime.loop.verification.min_candidate_clique_size
++            << ", graph_kernel=" << parameters_.runtime.graph.robust_kernel
+             << ", uwb=" << (parameters_.runtime.uwb.enabled ? "enabled" : "disabled")
+             << ", uwb_dimension=" << (parameters_.runtime.uwb.use_z ? "xyz" : "xy")
+             << ", uwb_zero_pose="
+diff --git a/src/backend/docs/parameters.md b/src/backend/docs/parameters.md
+index 11f1718..38466b7 100644
+--- a/src/backend/docs/parameters.md
++++ b/src/backend/docs/parameters.md
+@@ -238,6 +238,8 @@
+ | `enabled` | 布尔 | `true` | 是否在建图时检测历史回环；启用先验地图或关闭描述子时会自动关闭 |
+ | `cooldown_keyframes` | 整数，帧 | `5` | 成功回环后至少间隔多少个关键帧才再次检索；须 `≥0`，`0` 不等待 |
+ | `candidate_max_distance` | 浮点，m | `7.0` | 按当前估计位置筛选回环候选的最大距离；须 `≥0`，`0` 不限距离 |
++| `place_seed_enabled` | 布尔 | `false` | 里程计初值验证失败后，允许描述子地点附近的第二初值；不绕过几何/PCM/NIS验收 |
++| `place_seed_min_keyframe_gap` | 整数 | `60` | 第二初值所需的最少关键帧索引差，须≥1 |
+ | `descriptor_ratio_threshold` | 浮点，无量纲 | `1.0` | 最优 / 次优描述子差异的比值上限；越小越要求最优候选明显胜出，范围 `[0,1]`，`1` 关闭 |
+ | `source.min_frames` | 整数，帧 | `1` | 至少累积多少个关键帧点云才验证回环；须在 `[1,source.max_frames]` |
+ | `source.max_frames` | 整数，帧 | `4` | 回环源点云最多累积的关键帧数，含当前关键帧；须 `≥1` |
+@@ -267,7 +269,7 @@
+ | `enabled` | 布尔 | `true` | 是否检查不同回环测量之间的一致性 |
+ | `translation_threshold` | 浮点，m | `1.0` | 两条回环与里程计组成闭合路径后，允许的最大平移误差；须 `≥0` |
+ | `rotation_threshold_deg` | 浮点，° | `15.0` | 两条回环与里程计组成闭合路径后，允许的最大旋转误差；须 `≥0` |
+-| `min_consistent_loops` | 整数，条 | `1` | 新回环至少要与多少条历史回环一致；须 `≥1`，没有可比较历史时跳过 |
++| `min_consistent_loops` | 整数，条 | `1` | 新回环至少要与多少条历史回环一致；`0`仅禁用历史支持要求，当前候选PCM仍有效；负数恢复默认值；没有可比较历史时跳过 |
+ | `min_candidate_clique_size` | 整数，条 | `1` | 同批候选中至少需要多少条两两一致的回环；须 `≥1` |
+ 
+ #### `graph` · 因子图（10 项）
+diff --git a/src/backend/include/backend/config.hpp b/src/backend/include/backend/config.hpp
+index 67c4ecc..a57e891 100644
+--- a/src/backend/include/backend/config.hpp
++++ b/src/backend/include/backend/config.hpp
+@@ -234,6 +234,10 @@ struct LoopConfig {
+     bool enabled = true;
+     int cooldown_keyframes = 5;
+     double candidate_max_distance = 0.0;
++    // Retry descriptor matches near the candidate origin when odometry has drifted.
++    // This is only a registration seed; every geometry/PCM/NIS gate still applies.
++    bool place_seed_enabled = false;
++    int place_seed_min_keyframe_gap = 60;
+     double descriptor_ratio_threshold = 1.0;
+     /// 回环源点云的历史累积配置，统一表达在最新关键帧坐标系。
+     SourceAccumulationConfig source{1, 4, 0.0, 0.0, 0.0};
+diff --git a/src/backend/src/config.cpp b/src/backend/src/config.cpp
+index eddfc05..63e0951 100644
+--- a/src/backend/src/config.cpp
++++ b/src/backend/src/config.cpp
+@@ -269,6 +269,7 @@ void normalizeUwbNumerics(UwbConfig& uwb, const UwbConfig& ud) {
+ /// 规范化回环检索、验证门限及一致性历史预算。
+ void normalizeLoopNumerics(LoopConfig& loop, const LoopConfig& defaults) {
+     loop.cooldown_keyframes = std::max(0, loop.cooldown_keyframes);
++    loop.place_seed_min_keyframe_gap = std::max(1, loop.place_seed_min_keyframe_gap);
+     fields(loop, defaults, {&LoopConfig::candidate_max_distance, &LoopConfig::target_radius},
+            nonnegativeOr);
+     loop.descriptor_ratio_threshold = std::clamp(
+@@ -284,7 +285,10 @@ void normalizeLoopNumerics(LoopConfig& loop, const LoopConfig& defaults) {
+     loop.verification.min_overlap_ratio = std::clamp(
+         finiteOr(loop.verification.min_overlap_ratio, defaults.verification.min_overlap_ratio), 0.0,
+         1.0);
+-    loop.verification.min_consistent_loops = std::max(1, loop.verification.min_consistent_loops);
++    // Explicit zero disables historical support, not same-source candidate PCM.
++    // Invalid negative values retain the default protection.
++    if (loop.verification.min_consistent_loops < 0)
++        loop.verification.min_consistent_loops = defaults.verification.min_consistent_loops;
+     loop.verification.min_candidate_clique_size =
+         std::max(1, loop.verification.min_candidate_clique_size);
+ }
+diff --git a/src/backend/src/loop.cpp b/src/backend/src/loop.cpp
+index 6ba2f41..5b087c3 100644
+--- a/src/backend/src/loop.cpp
++++ b/src/backend/src/loop.cpp
+@@ -9,6 +9,7 @@
+ #include <cmath>
+ #include <limits>
+ #include <optional>
++#include <sstream>
+ #include <thread>
+ #include <utility>
+ 
+@@ -123,9 +124,20 @@ std::optional<VerifiedLoop> LoopMatcher::verifyCandidate(const LoopWork& work,
+     if (!getSnapshotKeyframe(work.trajectory, candidate.index, &target_keyframe)) {
+         return std::nullopt;
+     }
++    // All frames in this frozen snapshot are historical. Restricting to the
++    // candidate's own prefix leaves keyframe zero with a single sparse scan.
++    // Include a bounded forward neighborhood of the historical anchor, while
++    // excluding every frame that can contribute to the current source window.
++    const int forward_frames = static_cast<int>(std::min<std::size_t>(
++        config_.loop.target_keyframes > 0 ? config_.loop.target_keyframes - 1 : 0,
++        static_cast<std::size_t>(std::numeric_limits<int>::max() - candidate.index)));
++    const int target_cutoff = config_.loop.place_seed_enabled
++        ? std::min(candidate.index + forward_frames,
++                   work.latest.index - std::max(1, config_.loop.source.max_frames))
++        : candidate.index;
+     const Cloud::Ptr target_raw = buildSpatialSubmapFromSnapshot(
+         work.trajectory, candidate.index, config_.loop.target_keyframes, config_.loop.target_radius,
+-        candidate.index);
++        target_cutoff);
+     const Cloud::Ptr target = target_raw
+                                   ? voxelize(*target_raw, config_.registration.voxel_resolution)
+                                   : Cloud::Ptr(new Cloud);
+@@ -145,41 +157,75 @@ std::optional<VerifiedLoop> LoopMatcher::verifyCandidate(const LoopWork& work,
+             *candidate.yaw_seed_rad, predicted.block<3, 1>(0, 3), work.latest.odom_pose,
+             target_keyframe.odom_pose, work.descriptor_level_with_odom_roll_pitch);
+     }
+-    const RegistrationResult result =
+-        matcher.align(*source, initial, 1.0 / static_cast<double>(std::max(1, source_keyframes)));
+-    if (!result.geometryVerified()) {
+-        return std::nullopt;
+-    }
++    auto verify_seed = [&](const Eigen::Matrix4d& seed, bool place = false) -> std::optional<VerifiedLoop> {
++        const RegistrationResult result =
++            matcher.align(*source, seed, 1.0 / static_cast<double>(std::max(1, source_keyframes)));
++        if (!result.geometryVerified()) {
++            if (place) {
++                BACKEND_INFO_STREAM("loop place-seed registration rejected: latest=" << work.latest.index
++                    << ", target=" << candidate.index << ", source_points=" << source->size()
++                    << ", target_points=" << target->size()
++                    << ", converged=" << result.converged << ", rank=" << result.measurement_information.rank
++                    << ", rmse=" << result.quality.rmse
++                    << ", correspondence_ratio=" << result.quality.correspondence_ratio
++                    << ", coverage=" << result.quality.coverage_sectors);
++            }
++            return std::nullopt;
++        }
+ 
+-    VerifiedLoop outcome;
+-    outcome.candidate = candidate;
+-    outcome.target_keyframe = target_keyframe;
+-    outcome.registration.valid = true;
+-    outcome.registration.converged = true;
+-    outcome.registration.rmse = result.quality.rmse;
+-    outcome.aligned_source = transformCloud(*source, result.source_to_target);
+-    outcome.registration.overlap_ratio =
+-        matcher.overlap(*outcome.aligned_source, config_.loop.verification.overlap_distance);
+-    outcome.target_raw = target_raw;
+-    outcome.measured_between = result.source_to_target.inverse();
+-    // M=target<-source 的左误差取逆后成为右误差；同时取反残差行和 Jacobian
+-    // 不改变似然。
+-    outcome.sqrt_information = -result.measurement_information.sqrt_information;
++        VerifiedLoop outcome;
++        outcome.candidate = candidate;
++        outcome.target_keyframe = target_keyframe;
++        outcome.registration.valid = true;
++        outcome.registration.converged = true;
++        outcome.registration.rmse = result.quality.rmse;
++        outcome.aligned_source = transformCloud(*source, result.source_to_target);
++        outcome.registration.overlap_ratio =
++            matcher.overlap(*outcome.aligned_source, config_.loop.verification.overlap_distance);
++        outcome.target_raw = target_raw;
++        outcome.measured_between = result.source_to_target.inverse();
++        // M=target<-source 的左误差取逆后成为右误差；同时取反残差行和 Jacobian
++        // 不改变似然。
++        outcome.sqrt_information = -result.measurement_information.sqrt_information;
+ 
+-    std::string reject_reason;
+-    if (!verifier_.validateMeasurement(work.latest, target_keyframe, candidate,
+-                                       outcome.measured_between, outcome.registration,
+-                                       &reject_reason)) {
+-        return std::nullopt;
++        std::string reject_reason;
++        if (!verifier_.validateMeasurement(work.latest, target_keyframe, candidate,
++                                           outcome.measured_between, outcome.registration,
++                                           &reject_reason)) {
++            return std::nullopt;
++        }
++        if (!verifier_.passesAcceptedConsistency(
++                work.latest, target_keyframe, outcome.measured_between, work.accepted_loops,
++                [&](const int index, Keyframe* keyframe) {
++                    return getSnapshotKeyframe(work.trajectory, index, keyframe);
++                })) {
++            if (place) {
++                BACKEND_INFO_STREAM("loop place-seed rejected by historical PCM: latest="
++                                    << work.latest.index << ", target=" << candidate.index);
++            }
++            return std::nullopt;
++        }
++        return outcome;
++    };
++    if (auto verified = verify_seed(initial)) {
++        return verified;
+     }
+-    if (!verifier_.passesAcceptedConsistency(
+-            work.latest, target_keyframe, outcome.measured_between, work.accepted_loops,
+-            [&](const int index, Keyframe* keyframe) {
+-                return getSnapshotKeyframe(work.trajectory, index, keyframe);
+-            })) {
+-        return std::nullopt;
++    // A place descriptor proposes a revisit, not an odometry-consistent translation.
++    // Retry from its spatial origin only for non-recent candidates, with a yaw seed.
++    if (config_.loop.place_seed_enabled && candidate.yaw_seed_rad.has_value() &&
++        work.latest.index - candidate.index >= config_.loop.place_seed_min_keyframe_gap &&
++        initial.block<3, 1>(0, 3).norm() > 1.0) {
++        Eigen::Matrix4d place_seed = initial;
++        place_seed.block<3, 1>(0, 3).setZero();
++        auto verified = verify_seed(place_seed, true);
++        if (verified) {
++            BACKEND_INFO_STREAM("loop place-seed geometry verified: latest=" << work.latest.index
++                                << ", target=" << candidate.index
++                                << ", predicted_translation=" << (initial.block<3, 1>(0, 3).norm()));
++        }
++        return verified;
+     }
+-    return outcome;
++    return std::nullopt;
+ }
+ 
+ /// 对候选一致性团按配准质量、描述子距离和索引确定性择优。
+@@ -290,6 +336,14 @@ std::optional<LoopWork> Localization::captureLoop() {
+     } else {
+         work.candidates = descriptor_.detectLatestCandidates();
+     }
++    if (config_.loop.place_seed_enabled && work.latest.index % 10 == 0) {
++        std::ostringstream candidates_log;
++        for (const auto& candidate : work.candidates) {
++            candidates_log << " " << candidate.index << ":" << candidate.descriptor_distance;
++        }
++        BACKEND_INFO_STREAM("loop candidates: latest=" << work.latest.index
++                            << ", index:distance=" << candidates_log.str());
++    }
+     // 描述子仍会由同步帧线程增长；同锁冻结其姿态语义，工作线程不再访问可变对象。
+     work.descriptor_level_with_odom_roll_pitch = descriptor_.levelWithOdomRollPitch();
+     work.accepted_loops = accepted_loops_;
+diff --git a/src/backend/test/integration/graph_test.cpp b/src/backend/test/integration/graph_test.cpp
+index 9722ab8..b4ac4f5 100644
+--- a/src/backend/test/integration/graph_test.cpp
++++ b/src/backend/test/integration/graph_test.cpp
+@@ -7,6 +7,7 @@
+ #include <vector>
+ 
+ #include "backend/loop_consistency.hpp"
++#include "backend/config.hpp"
+ #include "backend/pose_graph.hpp"
+ #include "backend/registration.hpp"
+ #include "backend/uwb_alignment.hpp"
+@@ -260,6 +261,25 @@ TEST(LoopConsensus, HistoricalSupportThresholdAndMissingHistoryHaveSeparateMeani
+                                                     history, lookup));
+ }
+ 
++TEST(LoopConsensus, ExplicitZeroHistoricalSupportSurvivesConfigResolution) {
++    Config requested;
++    requested.loop.verification.min_consistent_loops = 0;
++    requested.loop.verification.min_candidate_clique_size = 3;
++    const auto effective = resolveConfig(requested, true).values;
++    EXPECT_EQ(effective.loop.verification.min_consistent_loops, 0);
++    EXPECT_EQ(effective.loop.verification.min_candidate_clique_size, 3);
++    EXPECT_TRUE(effective.loop.verification.enable_pcm);
++    LoopClosureVerifier verifier(effective.loop.verification);
++    const auto lookup = [](int, Keyframe* out) { *out = Keyframe{}; return true; };
++    EXPECT_TRUE(verifier.passesAcceptedConsistency(Keyframe{}, Keyframe{}, testing::translation(6),
++        {{0, 1, Eigen::Matrix4d::Identity()}}, lookup));
++    VerifiedLoop a, b;
++    b.measured_between = testing::translation(6);
++    EXPECT_FALSE(verifier.areSameSourceLoopsConsistent(a, b));
++    requested.loop.verification.min_consistent_loops = -1;
++    EXPECT_EQ(resolveConfig(requested, true).values.loop.verification.min_consistent_loops, 1);
++}
++
+ /// 用已知平面变换验证 UWB 对齐，并检查内点保留原始测量时间戳。
+ TEST(UwbAlignment, RecoversKnownPlanarTransformAndRetainsOriginalTimestamps) {
+     UwbAlignmentConfig config;
+diff --git a/src/backend/test/integration/localization_test.cpp b/src/backend/test/integration/localization_test.cpp
+index 567100e..4cedfcb 100644
+--- a/src/backend/test/integration/localization_test.cpp
++++ b/src/backend/test/integration/localization_test.cpp
+@@ -147,6 +147,86 @@ TEST_F(LocalizationFlow, InconsistentLoopCannotRewriteOdometryOrDegradeTrackingH
+     EXPECT_LT((output(current).T_map_sensor - current.odom_pose).norm(), 1e-10);
+ }
+ 
++// Geometry recovered from a place seed is still subject to graph innovation gating.
++TEST_F(LocalizationFlow, PlaceSeedCannotBypassJointInnovationGate) {
++    config.loop.enabled = true;
++    config.loop.place_seed_enabled = true;
++    config.loop.place_seed_min_keyframe_gap = 2;
++    config.loop.candidate_max_distance = 0;
++    config.loop.source.max_frames = 1;
++    config.loop.verification.z_max = 0; // non-gravity-aligned odometry: NIS still gates Z
++    config.graph.odom_noise.translation_variance_per_second = 1e-6;
++    config.graph.odom_noise.rotation_variance_per_second = 1e-6;
++    start(false);
++    FrontendFrame current;
++    for (int index = 0; index < 4; ++index) {
++        current = frame(10 + index, Eigen::Matrix4d::Identity(),
++                        testing::scenePose(index == 3 ? 20 : .1 * index, 0, index == 3 ? 2 : 0, 0));
++        ASSERT_TRUE(ingest(current));
++        maintain();
++    }
++    LoopWork work;
++    work.latest = trajectory.latest();
++    work.trajectory = trajectory.snapshot();
++    work.candidates = descriptor.detectLatestCandidates();
++    work.descriptor_level_with_odom_roll_pitch = descriptor.levelWithOdomRollPitch();
++    ASSERT_TRUE(LoopMatcher({config.loop, config.relocalization.point_to_plane_config})
++                    .compute(work).selected);
++    EXPECT_TRUE(controller->visualization().loop_edges.empty());
++    EXPECT_LT((output(current).T_map_sensor - current.odom_pose).norm(), 1e-10);
++}
++
++// A descriptor-supported revisit must not depend on a drifted odometry translation.
++TEST_F(LocalizationFlow, PlaceSeedRecoversDistantRevisitWithoutBypassingGeometry) {
++    LoopWork work;
++    Keyframe target;
++    target.index = 0;
++    target.timestamp = 10;
++    Cloud::Ptr sparse_anchor(new Cloud);
++    sparse_anchor->points.assign(world->points.begin(), world->points.begin() + 20);
++    sparse_anchor->width = static_cast<std::uint32_t>(sparse_anchor->size());
++    sparse_anchor->height = 1;
++    target.cloud = CloudBlock(sparse_anchor);
++    Keyframe neighbor = target;
++    neighbor.index = 1;
++    neighbor.timestamp = 11;
++    neighbor.cloud = CloudBlock(world);
++    const Eigen::Matrix4d truth = testing::scenePose(.2, -.1, .03, .1);
++    const auto input = frame(20, truth, testing::scenePose(20, 0, 0, .1));
++    work.latest.index = 100;
++    work.latest.timestamp = 20;
++    work.latest.odom_pose = input.odom_pose;
++    work.latest.optimized_pose = input.odom_pose;
++    work.latest.cloud = CloudBlock(input.cloud_local);
++    work.trajectory = {target, neighbor, work.latest};
++    LoopCandidate candidate;
++    candidate.index = 0;
++    candidate.yaw_seed_rad = .1;
++    candidate.descriptor_distance = .01;
++    work.candidates = {candidate};
++    config.loop.source.max_frames = 1;
++    config.loop.target_keyframes = 2;
++    config.loop.verification.translation_max = 3;
++    config.loop.verification.min_overlap_ratio = .45;
++    config.loop.max_parallel_verifications = 1;
++    auto registration = config.relocalization.point_to_plane_config;
++    EXPECT_FALSE(LoopMatcher({config.loop, registration}).compute(work).selected);
++    config.loop.place_seed_enabled = true;
++    const auto recovered = LoopMatcher({config.loop, registration}).compute(work);
++    ASSERT_TRUE(recovered.selected);
++    EXPECT_LT((recovered.selected->measured_between - truth.inverse()).norm(), .01);
++    // Still reject a measurement outside the configured geometric translation limit.
++    config.loop.verification.translation_max = .01;
++    EXPECT_FALSE(LoopMatcher({config.loop, registration}).compute(work).selected);
++    config.loop.verification.translation_max = 3;
++    work.candidates.front().yaw_seed_rad.reset();
++    EXPECT_FALSE(LoopMatcher({config.loop, registration}).compute(work).selected);
++    work.candidates.front().yaw_seed_rad = .1;
++    work.latest.index = 30;
++    work.trajectory.back() = work.latest;
++    EXPECT_FALSE(LoopMatcher({config.loop, registration}).compute(work).selected);
++}
++
+ /// LiDAR 局部模型失效时立即进入恢复，同周期通过的 UWB 观测不能抵消该事件。
+ TEST_F(LocalizationFlow, InvalidLidarModelCannotBeHiddenByConsistentUwbEvidence) {
+     config.startup_hint.T_map_sensor = Eigen::Matrix4d::Identity();
+diff --git a/src/backend/test/tools/inspect_loop.cpp b/src/backend/test/tools/inspect_loop.cpp
+new file mode 100644
+--- /dev/null
++++ b/src/backend/test/tools/inspect_loop.cpp
+@@ -0,0 +1,74 @@
++// Offline inspection of a saved runtime-map loop and reconstructed graph.
++// Does not alter the saved map or any running backend.
++#include "backend/keyframe_map.hpp"
++#include "backend/scan_context.hpp"
++#include "backend/geometry.hpp"
++#include "backend/loop.hpp"
++#include "backend/frame_history.hpp"
++#include "backend/sampling.hpp"
++#include "backend/pose_graph.hpp"
++#include <iostream>
++#include <fstream>
++int main(int argc, char** argv) {
++    if (argc < 2) return 2;
++    backend::KeyframeMap map;
++    if (!map.load(argv[1], 256*1024*1024)) return 3;
++    auto frames = map.snapshot();
++    if (frames.empty()) return 4;
++    const int source_index = argc > 2 ? std::stoi(argv[2]) : frames.back().index;
++    const int target_index = argc > 3 ? std::stoi(argv[3]) : 0;
++    if(source_index < 0 || source_index >= static_cast<int>(frames.size()) || target_index < 0 || target_index >= source_index) return 4;
++    frames.resize(static_cast<std::size_t>(source_index + 1));
++    backend::LoopWork work; work.latest=frames.back(); work.trajectory=frames;
++    const auto& target=frames.at(static_cast<std::size_t>(target_index));
++    backend::ScanContextDescriptor descriptor;
++    backend::ScanContextDescriptorConfig sc; sc.distance_threshold=.8; descriptor.configure(sc);
++    auto source_cloud=work.latest.cloud.load(),target_cloud=target.cloud.load();
++    descriptor.addKeyframe(*backend::transformCloud(*target_cloud,backend::levelFromBodyTransform(target.odom_pose)));
++    auto yaw=descriptor.estimateYaw(*backend::transformCloud(*source_cloud,backend::levelFromBodyTransform(work.latest.odom_pose)),0);
++    if (!yaw) return 5;
++    std::cout << "source=" << source_index << " target=" << target_index << " yaw=" << yaw->yaw_rad << " sc_distance=" << yaw->descriptor_distance << "\n";
++    backend::LoopCandidate candidate;candidate.index=target_index;candidate.yaw_seed_rad=yaw->yaw_rad;candidate.descriptor_distance=yaw->descriptor_distance;
++    work.candidates={candidate};work.descriptor_level_with_odom_roll_pitch=true;
++    backend::LoopConfig lc; lc.place_seed_enabled=true;lc.target_keyframes=17;lc.source.max_frames=4;lc.verification.translation_max=3;lc.verification.z_max=argc > 4 ? std::stod(argv[4]) : .5;lc.verification.roll_pitch_max_rad=10*backend::kPi/180;lc.verification.min_overlap_ratio=.45;
++    backend::RegistrationConfig rc;rc.voxel_resolution=.4;rc.max_iterations=16;rc.max_correspondence_distance=1;rc.min_correspondence_ratio=.5;rc.coarse_trigger_min_correspondence_ratio=.35;rc.max_rmse=.25;rc.huber_delta=.25;rc.measurement_translation_std_floor=.005;rc.measurement_rotation_std_floor_rad=.02*backend::kPi/180;
++    auto source=backend::accumulateSource(work.latest,frames,lc.source);
++    auto sd=backend::voxelize(*source.cloud,.4);
++    for (int forward : {0,16}) {
++        auto td=backend::voxelize(*backend::LoopMatcher::buildSpatialSubmapFromSnapshot(frames,target_index,17,12,std::min(source_index-4,target_index+forward)),.4);
++        backend::Registration matcher(rc);matcher.setTarget(td,target_index);
++        Eigen::Matrix4d predicted=target.optimized_pose.inverse()*work.latest.optimized_pose;
++        for (bool place : {false,true}) {
++            Eigen::Vector3d translation=predicted.block<3,1>(0,3);if(place)translation.setZero();
++            auto seed=backend::descriptorYawToRawSourceTarget(yaw->yaw_rad,translation,work.latest.odom_pose,target.odom_pose,true);
++            auto r=matcher.align(*sd,seed,.25);
++            std::cout << "forward=" << forward << " place=" << place << " target_points=" << td->size() << " source_points=" << sd->size() << " converged=" << r.converged << " geometry=" << r.geometryVerified() << " rmse=" << r.quality.rmse << " ratio=" << r.quality.correspondence_ratio << " sectors=" << r.quality.coverage_sectors << " translation=" << r.source_to_target.block<3,1>(0,3).transpose() << "\n";
++        }
++    }
++    auto result=backend::LoopMatcher({lc,rc}).compute(work);
++    std::cout << "selected=" << static_cast<bool>(result.selected) << "\n";
++    if (result.selected) {
++        for (const std::string kernel : {"cauchy", "huber"}) {
++            backend::PoseGraphConfig gc;gc.fixed_lag_seconds=0;gc.robust_kernel=kernel;gc.robust_kernel_size=kernel=="cauchy"?.5:1.;
++            gc.odom_noise.rotation_variance_per_second=1e-6;gc.odom_noise.translation_variance_per_second=.0005;
++            gc.odom_noise.rotation_variance_per_radian=3e-7;gc.odom_noise.translation_variance_per_meter=.0002;
++            backend::PoseGraph graph(gc);graph.addPrior(0,frames[0].odom_pose,frames[0].timestamp);graph.update(false);
++            for(std::size_t i=1;i<frames.size();++i) {
++                Eigen::Matrix4d delta=frames[i-1].odom_pose.inverse()*frames[i].odom_pose;
++                auto covariance=gc.odom_noise.covariance(frames[i].timestamp-frames[i-1].timestamp,delta.block<3,1>(0,3).norm(),backend::rotationAngleFromMatrix(delta));
++                graph.addOdometryMeasurement(static_cast<int>(i)-1,static_cast<int>(i),delta,frames[i].odom_pose,covariance,frames[i].timestamp);graph.update(false);
++            }
++            auto& hit=*result.selected;
++            auto term=graph.linearizeRelativePose(source_index,target_index,hit.measured_between,hit.sqrt_information);
++            auto assessment=graph.assessInnovationBatch({term});
++            std::cout << "offline_graph_no_historical_loops kernel=" << kernel << " NIS=" << assessment.joint.nis << " p=" << assessment.joint.upper_tail_probability << "\n";
++            if(assessment.joint.valid && assessment.joint.upper_tail_probability>=.001) {
++                graph.addLoopInformation(source_index,target_index,hit.measured_between,hit.sqrt_information);graph.update(true);
++                auto last=graph.estimate(source_index),first=graph.estimate(target_index);
++                if(last && first)std::cout << "offline_endpoint=" << (last->block<3,1>(0,3)-first->block<3,1>(0,3)).norm() << "\n";
++            }
++        }
++    }
++
++    return 0;
++}

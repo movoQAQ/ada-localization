@@ -1,0 +1,282 @@
+{
+  "replay-mid360-huber-historical-pcm-full": {
+    "frontend_odometry_count": 78020,
+    "backend_pose_count": 77959,
+    "cloud_count": 4094,
+    "status_messages": {
+      "NORMAL": 4125
+    },
+    "frontend_gaps": {
+      "p50_ms": 5.35936,
+      "p95_ms": 6.2237695999999865,
+      "p99_ms": 20.057185279999985,
+      "max_ms": 329.963008
+    },
+    "backend_gaps": {
+      "p50_ms": 5.359872,
+      "p95_ms": 6.317683199999995,
+      "p99_ms": 20.05943039999999,
+      "max_ms": 329.963008
+    },
+    "frontend_endpoint_displacement_m": 5.985236032581578,
+    "backend_endpoint_displacement_m": 5.9918259943628325,
+    "accepted": 429,
+    "rejected": 0,
+    "seed": 1,
+    "accepted_loop_log_count": 13,
+    "fault": false,
+    "node_exit_codes": {
+      "player_exit": 0,
+      "backend_exit": 0,
+      "frontend_exit": 0
+    },
+    "observer_errors": [],
+    "backend_node_died": false,
+    "input_imu_count": 85965,
+    "frontend_first_stamp_ns": 1777273013252953088,
+    "frontend_last_stamp_ns": 1777273441889098496,
+    "frontend_duration_s": 428.636145408,
+    "frontend_endpoint_delta_xyz_m": [
+      5.588230120396033,
+      -0.34244760629235466,
+      2.1160019196957354
+    ],
+    "backend_first_stamp_ns": 1777273013268895232,
+    "backend_last_stamp_ns": 1777273441889098496,
+    "backend_duration_s": 428.620203264,
+    "backend_endpoint_delta_xyz_m": [
+      5.582629928401314,
+      -0.3256591520404772,
+      2.1517825043280654
+    ],
+    "accepted_loop_keyframe_pairs": [
+      [
+        51,
+        35
+      ],
+      [
+        56,
+        39
+      ],
+      [
+        61,
+        38
+      ],
+      [
+        66,
+        37
+      ],
+      [
+        623,
+        608
+      ],
+      [
+        628,
+        608
+      ],
+      [
+        633,
+        614
+      ],
+      [
+        638,
+        613
+      ],
+      [
+        643,
+        626
+      ],
+      [
+        648,
+        633
+      ],
+      [
+        653,
+        635
+      ],
+      [
+        658,
+        641
+      ],
+      [
+        663,
+        635
+      ]
+    ],
+    "quality_counts_are_log_rows": true,
+    "cropped_point_fraction": 0.8733099038439143,
+    "full_nonempty_bins_mean": 401.94403714565004,
+    "cropped_nonempty_bins_mean": 76.52321603128054,
+    "descriptor_changed_fraction": 1.0
+  },
+  "replay-mid360-huber-input-fault": {
+    "frontend_odometry_count": 3664,
+    "backend_pose_count": 3658,
+    "cloud_count": 194,
+    "status_messages": {
+      "NORMAL": 195
+    },
+    "frontend_gaps": {
+      "p50_ms": 5.266432,
+      "p95_ms": 5.9757824,
+      "p99_ms": 15.51684608,
+      "max_ms": 35.831552
+    },
+    "backend_gaps": {
+      "p50_ms": 5.268224,
+      "p95_ms": 5.9776511999999995,
+      "p99_ms": 15.60597504000001,
+      "max_ms": 35.831552
+    },
+    "frontend_endpoint_displacement_m": 18.108871785960943,
+    "backend_endpoint_displacement_m": 18.10619456803714,
+    "accepted": 20,
+    "rejected": 0,
+    "seed": 1,
+    "accepted_loop_log_count": 0,
+    "fault": true,
+    "node_exit_codes": {
+      "player_exit": 0,
+      "backend_exit": 0,
+      "frontend_exit": 0
+    },
+    "observer_errors": [
+      "observer interrupted; incomplete replay",
+      "frontend fault/crash"
+    ],
+    "backend_node_died": false,
+    "input_imu_count": 9112,
+    "frontend_first_stamp_ns": 1777273013252953088,
+    "frontend_last_stamp_ns": 1777273032623832320,
+    "frontend_duration_s": 19.370879232,
+    "frontend_endpoint_delta_xyz_m": [
+      17.09482669475747,
+      -5.3170208869629265,
+      2.725330534848877
+    ],
+    "backend_first_stamp_ns": 1777273013262854400,
+    "backend_last_stamp_ns": 1777273032623832320,
+    "backend_duration_s": 19.36097792,
+    "backend_endpoint_delta_xyz_m": [
+      17.092181560381974,
+      -5.31602337503008,
+      2.7260790008159788
+    ],
+    "accepted_loop_keyframe_pairs": [],
+    "quality_counts_are_log_rows": true,
+    "cropped_point_fraction": 0.6849816748419386,
+    "full_nonempty_bins_mean": 468.24226804123714,
+    "cropped_nonempty_bins_mean": 140.10824742268042,
+    "descriptor_changed_fraction": 1.0
+  },
+  "replay-mid360-clique-clamped-full": {
+    "frontend_odometry_count": 78380,
+    "backend_pose_count": 78313,
+    "cloud_count": 4098,
+    "status_messages": {
+      "NORMAL": 4101
+    },
+    "frontend_gaps": {
+      "p50_ms": 5.364736,
+      "p95_ms": 6.210841599999998,
+      "p99_ms": 19.882234880000002,
+      "max_ms": 174.273536
+    },
+    "backend_gaps": {
+      "p50_ms": 5.366016,
+      "p95_ms": 6.400307199999928,
+      "p99_ms": 19.884259840000002,
+      "max_ms": 174.273536
+    },
+    "frontend_endpoint_displacement_m": 4.811666862774509,
+    "backend_endpoint_displacement_m": 4.80652528493028,
+    "accepted": 428,
+    "rejected": 0,
+    "seed": 1,
+    "accepted_loop_log_count": 13,
+    "fault": false,
+    "node_exit_codes": {
+      "player_exit": 0,
+      "backend_exit": 0,
+      "frontend_exit": 0
+    },
+    "observer_errors": [],
+    "backend_node_died": false,
+    "input_imu_count": 85965,
+    "frontend_first_stamp_ns": 1777273014652928768,
+    "frontend_last_stamp_ns": 1777273441889098496,
+    "frontend_duration_s": 427.236169728,
+    "frontend_endpoint_delta_xyz_m": [
+      4.026263465530591,
+      0.8749688467193806,
+      2.4851096598996274
+    ],
+    "backend_first_stamp_ns": 1777273014668845312,
+    "backend_last_stamp_ns": 1777273441889098496,
+    "backend_duration_s": 427.220253184,
+    "backend_endpoint_delta_xyz_m": [
+      4.0291838055764755,
+      0.8599300805351964,
+      2.4756581816044614
+    ],
+    "accepted_loop_keyframe_pairs": [
+      [
+        49,
+        32
+      ],
+      [
+        54,
+        39
+      ],
+      [
+        59,
+        36
+      ],
+      [
+        64,
+        35
+      ],
+      [
+        621,
+        605
+      ],
+      [
+        626,
+        605
+      ],
+      [
+        631,
+        614
+      ],
+      [
+        636,
+        612
+      ],
+      [
+        641,
+        624
+      ],
+      [
+        646,
+        630
+      ],
+      [
+        651,
+        632
+      ],
+      [
+        656,
+        635
+      ],
+      [
+        661,
+        637
+      ]
+    ],
+    "quality_counts_are_log_rows": true,
+    "cropped_point_fraction": 0.9145921161526114,
+    "full_nonempty_bins_mean": 401.08766788766786,
+    "cropped_nonempty_bins_mean": 52.48058608058608,
+    "descriptor_changed_fraction": 1.0
+  }
+}

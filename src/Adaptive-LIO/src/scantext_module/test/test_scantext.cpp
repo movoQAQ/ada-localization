@@ -54,9 +54,11 @@ TEST(ScanContextTest, RotationInvariance) {
     // Distance should be 0 (perfect match with shift)
     EXPECT_NEAR(res.first, 0.0, 1e-4);
     
-    // Shift should be num_sector / 4 (90 degrees)
-    // 60 sectors / 4 = 15
-    EXPECT_EQ(res.second, 15);
+    // circshift moves descriptor columns LEFT; +90 degrees requires -15 mod 60.
+    EXPECT_EQ(res.second, 45);
+    auto reverse = sc.distanceBtnScanContext(desc2, desc1);
+    EXPECT_NEAR(reverse.first, 0.0, 1e-4);
+    EXPECT_EQ(reverse.second, 15);
 }
 
 int main(int argc, char **argv) {
