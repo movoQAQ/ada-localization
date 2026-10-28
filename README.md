@@ -25,7 +25,7 @@ flowchart LR
 - 后端补丁增加可选重访配准初值、起点历史邻域，并修复历史 PCM 支持数为 0 时被归一化强制改成 1 的问题。
 - Mid-360 专用后端采用 Huber 核、至少三个当前一致候选和完整六维 NIS；禁用不适用的固定世界 Z 残差与历史 PCM 支持要求。其他配置不自动启用这些专用策略。
 
-后端源码通过**固定上游提交 + 本仓库补丁**交付，不包含第二份完整后端树。补丁及应用说明见 [tools/patches](tools/patches/README.md)。仅构建本仓库的前端不会自动安装后端。
+后端源码已直接纳入 [`src/tdt_backend`](src/tdt_backend/UPSTREAM.md)，包含已应用补丁的 backend、localization_interfaces、默认配置及 GPL-2.0 许可。一次克隆即可获取前后端源码；系统依赖仍需手动安装。
 
 ## 已验证结果及口径
 
@@ -41,7 +41,7 @@ SEU library Mid-360 原包约 429.83 秒，保留消息与原始时间戳，以 
 
 最终接受了关键帧 `762 → 5` 的跨整圈约束，6 个候选形成一致团，NIS 概率 `0.0178481` 通过 `0.001` 门限。最后的闭环优化发生在最后一条 IMU 之后，因此最后在线消息保留修正前值；历史在线消息不会被回溯重写。**0.161 m 是优化轨迹闭合距离，不是在线末消息偏差，也不是真值 ATE。** 数据没有外部真值，不能由单包闭合推导全场景精度或稳定性结论。
 
-此前验证通过前端 5 组 CTest、后端 80 个用例；这些是对应修复版本的测试记录，本次仓库整理没有重新完整回放。原始 bag、构建产物、Docker 镜像不随仓库分发。
+2026-10-28 纳入完整后端后，统一工作空间的 4 个 ROS 包构建通过，前端 5 组 CTest 和后端 6 组代表性 CTest 通过，联合入口启动与正常退出通过。后端源码与此前本地跑包版本逐文件一致；本次源码整理没有重新完整回放，也没有验收空白系统的全流程依赖安装。原始 bag、本机依赖、构建产物和 Docker 镜像不随本次提交分发。
 
 - [完整修复报告、失败对照和限制](docs/validation/mid360-fix-report.md)
 - [最终指标 JSON](docs/validation/mid360-fixed-results.json) · [优化关键帧](docs/validation/mid360-fixed-keyframes.txt) · [关键日志](docs/validation/mid360-fixed-evidence.log)
@@ -50,65 +50,162 @@ SEU library Mid-360 原包约 429.83 秒，保留消息与原始时间戳，以 
 
 ![轨迹对照，灰色为在线历史消息，蓝色为最终优化关键帧](docs/validation/mid360-fixed-trajectories.png)
 
-## 构建及运行联合定位
+## 安装、构建和联合运行（人工配置）
 
-先按下文“前端工程说明”的依赖和编译步骤构建 `adaptive_lio`。在新终端中准备独立后端：
+目标平台：**Ubuntu 24.04 / ROS 2 Jazzy / C++17**。本仓库现在包含完整的 Adaptive-LIO 前端、T-DT 后端和消息接口源码；不需要另行克隆 `z-localization`，也不要再次应用历史补丁。GTSAM、nanoflann 等依赖由工程师安装到仓库外。以下命令使用 Bash。
 
-```bash
-# 在 ada-localization 仓库根目录执行；两个仓库放在同级目录。
-ADA_ROOT="$(pwd)"
-git clone https://github.com/mozihe/z-localization.git ../z-localization
-git -C ../z-localization checkout 76e126328b670adc92981d9b4900cc059a6f2343
-git -C ../z-localization apply --check "$ADA_ROOT/tools/patches/z-localization-adaptive-lio.patch"
-git -C ../z-localization apply "$ADA_ROOT/tools/patches/z-localization-adaptive-lio.patch"
-```
+### 1. 安装 ROS 2 和系统依赖
 
-后端除 ROS/PCL/Eigen/TBB 依赖外，需要 **GTSAM 4.2、nanoflann 1.4.3、libmetis-dev**。本次 Jazzy 环境曾遇到系统 nanoflann 1.5.4 接口不兼容，以及 GTSAM 包导出 CppUnitLite 但缺少库的问题；后者通过编译 GTSAM 4.2 对应 CppUnitLite 源码解决，没有删除测试或使用空库。详见 [集成说明](docs/tdt-integration.md)。这不是已验证的全新机器一键安装脚本。
-
-在上述依赖已安装后，构建独立后端：
+先按 [ROS 2 Jazzy Ubuntu deb 安装说明](https://docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debs.html) 配置 ROS 软件源并安装 `ros-jazzy-desktop`。完成后在新终端执行：
 
 ```bash
 source /opt/ros/jazzy/setup.bash
-cd ../z-localization
-rosdep install --from-paths src/backend src/localization_interfaces \
-  --ignore-src -r -y --rosdistro jazzy
-# 指向包含 1.4.3 版 nanoflann.hpp 的实际目录
-NANOFLANN_INCLUDE_DIR=/absolute/path/to/nanoflann-1.4.3/include
-CMAKE_BUILD_PARALLEL_LEVEL=2 colcon build \
-  --packages-select localization_interfaces backend \
-  --cmake-args -DBUILD_TESTING=ON -DNANOFLANN_INCLUDE_DIR="$NANOFLANN_INCLUDE_DIR"
+sudo apt update
+sudo apt install -y \
+  build-essential cmake git python3-colcon-common-extensions python3-rosdep \
+  python3-pytest python3-numpy python3-yaml \
+  libeigen3-dev libpcl-dev libceres-dev libgoogle-glog-dev libgflags-dev \
+  libyaml-cpp-dev libopencv-dev libsuitesparse-dev libboost-all-dev \
+  libtbb-dev libmetis-dev libapr1-dev \
+  ros-jazzy-ament-cmake-auto ros-jazzy-ament-cmake-gtest \
+  ros-jazzy-ament-cmake-pytest ros-jazzy-launch-testing-ament-cmake \
+  ros-jazzy-pcl-conversions ros-jazzy-tf2-eigen ros-jazzy-tf2-geometry-msgs \
+  ros-jazzy-message-filters ros-jazzy-sensor-msgs-py \
+  ros-jazzy-rosbag2 ros-jazzy-rosbag2-storage-mcap
+```
+
+### 2. 在仓库外准备 GTSAM 4.2 和 nanoflann 1.4.3
+
+后端使用 GTSAM **4.2.x**，不要使用 4.3。nanoflann 固定 **1.4.3**；Ubuntu 24.04 的 1.5.x 与本后端的 `SearchParams` 接口不兼容。下面采用独立前缀源码安装，不需要 `sudo make install`，也不修改系统 GTSAM。
+
+```bash
+mkdir -p "$HOME/ada-deps/src"
+git clone --branch 4.2 --depth 1 https://github.com/borglab/gtsam.git \
+  "$HOME/ada-deps/src/gtsam-4.2"
+cmake -S "$HOME/ada-deps/src/gtsam-4.2" -B "$HOME/ada-deps/build/gtsam-4.2" \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_INSTALL_PREFIX="$HOME/ada-deps/install/gtsam-4.2" \
+  -DCMAKE_INSTALL_LIBDIR=lib \
+  -DGTSAM_USE_SYSTEM_EIGEN=ON \
+  -DGTSAM_BUILD_TESTS=OFF -DGTSAM_BUILD_EXAMPLES_ALWAYS=OFF \
+  -DGTSAM_BUILD_UNSTABLE=OFF -DGTSAM_BUILD_PYTHON=OFF \
+  -DGTSAM_INSTALL_CPPUNITLITE=ON
+cmake --build "$HOME/ada-deps/build/gtsam-4.2" --parallel 2
+cmake --install "$HOME/ada-deps/build/gtsam-4.2"
+
+git clone --branch v1.4.3 --depth 1 https://github.com/jlblancoc/nanoflann.git \
+  "$HOME/ada-deps/src/nanoflann-1.4.3"
+```
+
+nanoflann 是头文件库，无需编译。GTSAM 编译内存不足时将 `--parallel 2` 改为 `--parallel 1`。Ubuntu 的部分 GTSAM 二进制包导出 `CppUnitLite` 却缺少对应静态库，会导致 CMake 报错；以上源码安装明确启用该库，不能用空文件或关闭后端测试绕过。
+
+每个构建或运行终端都需要设置以下环境，也可以自行保存为仓库外的环境脚本：
+
+```bash
+source /opt/ros/jazzy/setup.bash
+export GTSAM_DIR="$HOME/ada-deps/install/gtsam-4.2/lib/cmake/GTSAM"
+export CMAKE_PREFIX_PATH="$HOME/ada-deps/install/gtsam-4.2:${CMAKE_PREFIX_PATH:-}"
+export LD_LIBRARY_PATH="$HOME/ada-deps/install/gtsam-4.2/lib:${LD_LIBRARY_PATH:-}"
+export NANOFLANN_INCLUDE_DIR="$HOME/ada-deps/src/nanoflann-1.4.3/include"
+test -f "$GTSAM_DIR/GTSAMConfig.cmake"
+test -f "$HOME/ada-deps/install/gtsam-4.2/lib/libCppUnitLite.a"
+test -f "$NANOFLANN_INCLUDE_DIR/nanoflann.hpp"
+```
+
+### 3. 克隆仓库并检查依赖
+
+```bash
+git clone https://github.com/movoQAQ/ada-localization.git
+cd ada-localization
+# 仅首次初始化 rosdep 时执行；已经初始化过则跳过。
+sudo rosdep init
+rosdep update
+rosdep install --from-paths src --ignore-src -y --rosdistro jazzy \
+  --skip-keys 'gtsam libnanoflann-dev PCL'
+```
+
+跳过的三个键分别由步骤 2 的 GTSAM、nanoflann 和步骤 1 的 `libpcl-dev` 提供。`rosdep` 若有其他失败应先解决，不要忽略错误继续编译。`PCL` 是前端遗留清单键，不是另一个需要下载的库。
+
+Livox 消息与驱动源码已在 `src/livox_ros_driver2` 中，现有仓库还沿用其随附的分架构 SDK 库；本次没有添加本机 SDK 或依赖产物。驱动 CMake 选择 `Livox-SDK2/lib/<架构>/liblivox_lidar_sdk_shared.so`，换架构需先确认该文件存在且与硬件匹配。回放 rosbag 不启动硬件驱动，但仍需要构建该包以生成消息类型。
+
+### 4. 在同一个工作空间构建前后端
+
+在只加载 ROS 和上述依赖、**没有加载其他同名工作空间**的终端，从仓库根目录执行：
+
+```bash
+MAKEFLAGS="-j2 -l2" CMAKE_BUILD_PARALLEL_LEVEL=2 colcon build --executor sequential \
+  --packages-up-to adaptive_lio backend \
+  --cmake-args -DBUILD_TESTING=ON \
+  -DGTSAM_DIR="$GTSAM_DIR" \
+  -DNANOFLANN_INCLUDE_DIR="$NANOFLANN_INCLUDE_DIR"
 source install/setup.bash
+ros2 pkg prefix adaptive_lio
+ros2 pkg prefix backend
+ros2 pkg prefix localization_interfaces
+```
+
+三个包应都解析到本仓库的 `install/`。`colcon` 会自动发现 `src/tdt_backend/src/` 下的两个后端包。不要再 source 旧的独立 `z-localization/install`。
+
+验证：
+
+```bash
+ctest --test-dir build/adaptive_lio \
+  -R '^adaptive_lio_(core|geometry|registration|pipeline|imu_quality)$' --output-on-failure
 ctest --test-dir build/backend \
   -R '^backend_(descriptor|relocalization|localization|graph|measurement|lifecycle)_test$' \
   --output-on-failure
 ```
 
-**启动前调整路径：** 当前受测 YAML 保留云环境绝对路径。将 `config/tdt_backend.yaml` 的 `extends` 指向本机后端 `config/backend.yaml`，将 `config/tdt_backend_mid360.yaml` 的 `extends` 指向本机 `tdt_backend.yaml`，并调整 `trajectory.save_directory`。配置位于 `src/Adaptive-LIO/config/`。`tools/build_tdt_backend.sh` 与回放工具也包含云环境路径，不能原样当作通用部署入口。
+也可以执行 `bash tools/build_localization.sh -DGTSAM_DIR="$GTSAM_DIR"`，它封装同样的构建和代表性测试，不安装任何依赖。只构建后端时使用 `tools/build_tdt_backend.sh`。
 
-在同一个终端 source ROS、前端和后端的安装空间，然后启动：
+### 5. 选择传感器配置并启动
 
-```bash
-source /opt/ros/jazzy/setup.bash
-source /absolute/path/to/ada-localization/install/setup.bash
-source /absolute/path/to/z-localization/install/setup.bash
-ros2 launch adaptive_lio tdt_backend.launch.py \
-  frontend_config:=/absolute/path/to/ada-localization/src/Adaptive-LIO/config/mapping_mid360.yaml \
-  backend_config:=/absolute/path/to/ada-localization/src/Adaptive-LIO/config/tdt_backend_mid360.yaml \
-  use_sim_time:=true
-# 在另一已 source ROS 的终端播放 ROS2 包：
-ros2 bag play /absolute/path/to/ros2_bag --clock --rate 1
-```
+| 配置 | 用途 |
+|---|---|
+| `mapping_m.yaml` | 默认单雷达：163 点云 + 163 IMU |
+| `mapping_dual_publish.yaml` | 163 定位，160 点云仅加入导航输出；只使用 163 IMU，`enable_bundle_fusion=false` |
+| `tdt_backend.yaml` | 已配好 Adaptive-LIO legacy 接口的独立后端配置，无云环境绝对路径 |
+| `mapping_mid360.yaml` + `tdt_backend_mid360.yaml` | 历史 SEU Mid-360 实验组合，不能直接代替本机 163/160 配置 |
 
-实机运行将 `use_sim_time` 设为 `false`，另行启动雷达驱动。检查 `/livox/lidar`、`/livox/imu`、消息类型、点时间、外参和加速度单位：专用配置的 `gnorm=9.805` 假设输入加速度单位为 g；已经是 m/s² 时不能再次这样缩放。此联合入口默认 mapping，未启用 UWB/先验地图；不是 Nav2 或底盘控制系统。
-
-复算最终保存轨迹指标（Python 环境需要 numpy）：
+从仓库根目录启动默认单雷达联合定位：
 
 ```bash
-python tools/summarize_tdt_replay.py /path/to/replay_output \
-  --optimized-keyframes docs/validation/mid360-fixed-keyframes.txt
+source install/setup.bash
+ros2 launch adaptive_lio tdt_backend.launch.py use_sim_time:=true
 ```
 
-`/path/to/replay_output` 是含 metrics.json 和前后端日志的回放输出目录，不是 bag 目录；全部原始运行输出未打包进 Git。仓库已保存汇总和小型证据。
+需要副雷达导航点云时，先停止上一次前后端，再启动：
+
+```bash
+ros2 launch adaptive_lio tdt_backend.launch.py use_sim_time:=true \
+  frontend_config:="$(pwd)/src/Adaptive-LIO/config/mapping_dual_publish.yaml"
+```
+
+另开终端，加载 ROS、上述依赖环境及本仓库 `install/setup.bash` 后播放数据。将下例路径替换为实际 rosbag 目录：
+
+```bash
+ros2 bag info /absolute/path/to/rosbag
+ros2 bag play /absolute/path/to/rosbag --clock --rate 1 --start-paused
+# 等前后端初始化、订阅建立后，在播放器终端按空格开始。
+```
+
+实机运行使用 `use_sim_time:=false`，并另行启动已配置 IP/外参的 Livox 驱动。核对输入话题、CustomMsg 类型、逐点时间和外参；`gnorm=9.805` 仅适用于输入加速度单位为 g，输入为 m/s² 时不能再次乘重力加速度。
+
+后端默认 mapping，关闭 UWB/先验地图，地图保存目录为启动工作目录下的 `./tdt-map`。如需修改，编辑 `tdt_backend.yaml` 中 `trajectory.save_directory`；这是普通路径，不会展开 `~`。前端发布 `odom → aft_mapped → base_link`，后端负责 `map → odom`；`tdt_sensor` 仍为当前后端参考系，换车要重新核对车体外参。
+
+检查：
+
+```bash
+ros2 topic hz /odom
+ros2 topic hz /adaptive_lio/backend/cloud
+ros2 topic hz /livox/scan
+ros2 run tf2_ros tf2_echo map odom
+```
+
+没有雷达输入、仍在静态初始化时，没有点云输出是正常的。需要静止起步；重播或故障后一起重启前后端。地图保存服务与地图包格式见 [后端说明](src/tdt_backend/src/backend/README.md)。
+
+本次集成使用已有本地依赖完成验证；上面的独立前缀 GTSAM 源码安装流程依据 4.2 的构建选项整理，尚未在空白系统上端到端验收。历史回放工具中的 `/workspace/...` 路径属于原实验记录，不是新安装入口。
+
 
 ## 遗留问题与部署边界
 
@@ -122,7 +219,7 @@ python tools/summarize_tdt_replay.py /path/to/replay_output \
 | 标定与统计门限 | 外参、驱动是否预变换、加速度单位需要逐设备核实。自适应协方差、世界 Z/历史 PCM 策略和 Huber 配置为当前实验配置，未完成跨设备统计标定。 |
 | 重置和会话 | 当前使用 legacy 接口，未实现 ZLIO 原子会话/暖重置协议；故障或重新播放应一起重启前后端。 |
 | 性能与实时性 | 最终回放在线输出最大时间戳间隔约 334 ms，未完成实时延迟预算验收。回放无崩溃不代表控制系统可直接使用。 |
-| 可移植部署 | YAML、工具包含 `/workspace/Adaptive-LIO` 等绝对路径；后端和依赖需另行准备，尚非全新机器一键构建。 |
+| 可移植部署 | 当前联合配置和构建入口已移除云环境路径，前后端源码已合并交付；依赖手动安装，尚未在空白机器上完整验收。 |
 
 ## 来源、许可与工程说明
 
@@ -226,42 +323,9 @@ flowchart TB
 
 **读图提示：**种子帧只利用已验证的 IMU 预测状态初始化地图，不执行 `ObserveSE3`；匹配拒绝帧依然向外层发送内层传播状态的完整快照，但**不更新地图，也不发布该帧的注册点云**。外层只从已安装的权威快照向后进行 IMU 传播，不会对同一 LiDAR 候选观测做第二次融合。`/odom`、TF 和 Path 来自外层；局部地图与 `/livox/scan` 来自内层。副雷达相关虚线在默认配置下不激活。
 
-## 快速开始
+## 单独运行前端
 
-### 1. 环境
-
-当前独立构建基线为 **Ubuntu 24.04 + ROS 2 Jazzy + C++17**，使用 Eigen、PCL、Ceres 2.x、glog、gflags、yaml-cpp 等。需要先按 [ROS 2 Jazzy 安装文档](https://docs.ros.org/en/jazzy/Installation.html) 配置 ROS 环境。
-
-```bash
-sudo apt update
-sudo apt install -y \
-  build-essential cmake git python3-colcon-common-extensions python3-rosdep \
-  libeigen3-dev libpcl-dev libceres-dev libgoogle-glog-dev libgflags-dev \
-  libyaml-cpp-dev libopencv-dev libsuitesparse-dev \
-  ros-jazzy-ament-cmake-auto ros-jazzy-pcl-conversions \
-  ros-jazzy-tf2-geometry-msgs ros-jazzy-message-filters \
-  ros-jazzy-rosbag2 ros-jazzy-rosbag2-storage-mcap
-```
-
-仓库 `src/livox_ros_driver2/` 提供 `livox_ros_driver2` 消息类型和驱动源码；**回放已有 rosbag 时不需要启动硬件驱动**。在目标机器上还需要匹配相应架构的 Livox SDK 库。
-
-### 2. 获取并编译
-
-```bash
-git clone https://github.com/movoQAQ/ada-localization.git adalio_ws
-cd adalio_ws
-source /opt/ros/jazzy/setup.bash
-
-# 已初始化 rosdep 的机器：
-rosdep update
-rosdep install --from-paths src --ignore-src -r -y --rosdistro jazzy
-
-CMAKE_BUILD_PARALLEL_LEVEL=2 colcon build --symlink-install \
-  --packages-up-to adaptive_lio --cmake-args -DBUILD_TESTING=ON
-source install/setup.bash
-```
-
-首次使用 `rosdep` 但尚未初始化时，先运行 `sudo rosdep init`。构建建议在**未 source 其他 ROS 工作空间**的新终端中进行，防止同名依赖和消息定义冲突。`--packages-up-to` 会连同需要的 `livox_ros_driver2` 一起构建。
+安装和统一构建请遵循上文“安装、构建和联合运行”，以下仅介绍不启动后端的入口。
 
 ### 3. 实时运行
 
@@ -382,7 +446,12 @@ LiDAR 观测协方差默认 `odometry.lidar_covariance_mode: fixed`。`adaptive`
     │   ├── test/                 # 确定性测试与回放检查工具
     │   ├── docs/                 # 算法约定、改造与分析报告
     │   └── validation/           # 构建、回归与历史验证记录
-    └── livox_ros_driver2/        # Livox 消息与驱动依赖
+    ├── livox_ros_driver2/        # Livox 消息与驱动依赖
+    └── tdt_backend/              # 已配置 T-DT 后端、接口、许可
+        ├── src/backend/
+        ├── src/localization_interfaces/
+        ├── config/
+        └── cmake/
 ```
 
 建议从 [`main_ada.cpp`](src/Adaptive-LIO/src/apps/main_ada.cpp) 阅读节点接口，然后看 [`lidarodom.cpp`](src/Adaptive-LIO/src/lio/lidarodom.cpp) 的帧处理事务，接着读 [`eskf.hpp`](src/Adaptive-LIO/src/algo/eskf.hpp)、[`imu_odom_predictor.h`](src/Adaptive-LIO/src/algo/imu_odom_predictor.h) 及 [`imu_odom_output.h`](src/Adaptive-LIO/src/apps/imu_odom_output.h)。

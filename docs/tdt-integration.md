@@ -1,5 +1,7 @@
 # T-DT 后端接入记录
 
+> 以下为历史云环境集成记录。当前完整后端已纳入 `src/tdt_backend/`，安装、统一构建与启动以根目录 README 为准；无需额外克隆后端或应用补丁。当前 `tdt_backend.yaml` 已展开继承且使用相对地图路径。
+
 上游：https://github.com/mozihe/z-localization ，提交 76e126328b670adc92981d9b4900cc059a6f2343（GPL-2.0-only，独立工作空间保留原许可）。本机路径 `/workspace/z-localization`。
 
 使用后端 `common.frontend: legacy`，不启动 ZLIO，不改变 Adaptive-LIO 的松耦合 ESKF。新增 `publish_backend_frames` ROS 参数默认关闭，开启后仅为接受/种子帧提供同一帧末的 `/adaptive_lio/backend/cloud`（odom 系、未作发布用 Z 裁剪）和 `/adaptive_lio/backend/odometry`（odom→aft_mapped 后验及位姿协方差）。高频预测仍使用 `/odom`。扫描末端消息只用于位姿配对，twist 未提供，不用于速度估计。

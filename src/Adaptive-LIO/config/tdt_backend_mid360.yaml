@@ -1,5 +1,5 @@
 # Mid-360 legacy frontend: geometric revisit seed with full 6D innovation checks.
-extends: /workspace/Adaptive-LIO/src/Adaptive-LIO/config/tdt_backend.yaml
+extends: tdt_backend.yaml
 loop:
   # Retrieval radius only; geometric registration, overlap and NIS stay unchanged.
   candidate_max_distance: 40.0
